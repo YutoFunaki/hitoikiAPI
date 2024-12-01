@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+firebase-admin
+python-jose
+pydantic[email]
+python-multipart
+passlib[bcrypt]
+email-validator
+python-dotenv
+aiofiles
+requests
+httpx
+pytest
+pytest-asyncio
+alembic

@@ -3,10 +3,14 @@ FROM python:3.11-slim
 
 # 作業ディレクトリを設定
 WORKDIR /app
-ENV PYTHONPATH=/app
+
+# Pythonモジュールパスを設定
+ENV PYTHONPATH=/app/app
 
 # 必要なファイルをコピー
 COPY ./app /app/app
+COPY ./app/firebase/hitoiki-app-firebase-adminsdk-xn0xn-bf68272980.json /app/app/firebase/
+
 
 # 依存関係をインストール
 RUN pip install --no-cache-dir -r /app/app/requirements.txt
