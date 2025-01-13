@@ -1,51 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React from "react";
+import ArticleCard from "./ArticleCard";
 
 interface Article {
     id: number;
     title: string;
-    content: string;
+    thumbnail_url?: string;
+    like_count: number;
+    comment_count: number;
+    access_count: number;
+    public_at: string;
 }
 
-const Articles: React.FC = () => {
-    const [articles, setArticles] = useState<Article[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
+interface ArticlesProps {
+    articles: Article[]; // 表示する記事リストを引数で渡す
+    title: string; // セクションのタイトル
+}
 
-    useEffect(() => {
-        const fetchArticles = async () => {
-            try {
-                const response = await axios.get('/api/articles');
-                setArticles(response.data);
-            } catch (err) {
-                setError('Failed to fetch articles');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchArticles();
-    }, []);
-
-    if (loading) {
-        return <div>Loading...</div>;
-    }
-
-    if (error) {
-        return <div>{error}</div>;
-    }
-
+const Articles: React.FC<ArticlesProps> = ({ articles, title }) => {
     return (
-        <div>
-            <h1>Articles</h1>
-            <ul>
-                {articles.map(article => (
-                    <li key={article.id}>
-                        <h2>{article.title}</h2>
-                        <p>{article.content}</p>
-                    </li>
-                ))}
-            </ul>
+        <div className="articles-container">
+            <h2 className="section-title">{title}</h2>
+            {articles && articles.length > 0 ? (
+                articles.map((article) => (
+                    <ArticleCard key={article.id} article={article} />
+                ))
+            ) : (
+                <p>記事がありません。</p>
+            )}
         </div>
     );
 };

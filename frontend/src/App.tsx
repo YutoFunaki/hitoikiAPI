@@ -2,16 +2,15 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./components/Login";
 import Register from "./components/Register";
-import Articles from "./components/Articles";
+import Index from "./components/Index";
 
-const App = () => {
+const App: React.FC = () => {
     return (
         <Router>
             <Routes>
-                <Route path="/articles" element={<Articles />} />
                 <Route path="/register" element={<Register />} />
-                <Route path="/" element={<Login />} />
-                
+                <Route path="/login" element={<Login />} />
+                <Route path="/*" element={<Index />} /> {/* Index内でさらにルーティング */}
             </Routes>
         </Router>
     );
