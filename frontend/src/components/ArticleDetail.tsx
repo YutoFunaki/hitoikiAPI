@@ -64,7 +64,7 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void }> 
     return (
         <form onSubmit={handleCommentSubmit} className="comment-form">
             <div>
-                <label>コメント</label>
+                <h3>コメントを投稿する</h3>
                 <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}

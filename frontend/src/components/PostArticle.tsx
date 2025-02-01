@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import ReactMde from "react-mde";
 import Showdown from "showdown";
 import "react-mde/lib/styles/css/react-mde-all.css";
@@ -11,6 +11,17 @@ const PostArticle: React.FC = () => {
     const [content, setContent] = useState("");
     const [mediaFiles, setMediaFiles] = useState<File[]>([]);
     const [selectedTab, setSelectedTab] = useState<"write" | "preview">("write");
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileUploadClick = () => {
+        if (!fileInputRef.current) {
+            console.error("fileInputRef.current is null");
+            return;
+        }
+        console.log("fileInputRef.current:", fileInputRef.current);
+        fileInputRef.current.click();
+    };
+    
 
     const handleCategoryChange = (category: string) => {
         setSelectedCategories((prev) => {
@@ -23,10 +34,17 @@ const PostArticle: React.FC = () => {
     };
 
     const handleFileUpload = (files: FileList | null) => {
+        console.log("handleFileUpload");
         if (files) {
-            setMediaFiles([...mediaFiles, ...Array.from(files)]);
+            const validFiles = Array.from(files).filter(file =>
+                ["image/jpeg", "image/png", "video/mp4"].includes(file.type) && file.size <= 10 * 1024 * 1024
+            );
+            if (validFiles.length < files.length) {
+                alert("一部のファイルは無効な形式またはサイズが大きすぎます。");
+            }
+            setMediaFiles([...mediaFiles, ...validFiles]);
         }
-    };
+    };    
 
     const handleInsertMedia = (file: File) => {
         const fileUrl = URL.createObjectURL(file);
@@ -66,35 +84,35 @@ const PostArticle: React.FC = () => {
 
     return (
         <div className="post-article-page">
-            <h1>記事を投稿する</h1>
-
-            {/* タイトル入力 */}
-            <div className="form-group">
-                <label>タイトル</label>
-                <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="記事のタイトルを入力してください"
-                />
-            </div>
+        <h1>記事を投稿する</h1>
+    
+        <div className="form-group">
+          <label htmlFor="title">タイトル</label>
+          <input
+            id="title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="記事のタイトルを入力してください"
+          />
+        </div>
 
             {/* カテゴリ選択 */}
             <div className="form-group">
-                <label>カテゴリ</label>
-                <div className="categories">
-                    {categories.map((cat) => (
-                        <label key={cat} className="category-item">
-                            <input
-                                type="checkbox"
-                                value={cat}
-                                checked={selectedCategories.includes(cat)}
-                                onChange={() => handleCategoryChange(cat)}
-                            />
-                            {cat}
-                        </label>
-                    ))}
-                </div>
+            <label>カテゴリ</label>
+            <div className="categories">
+                {categories.map((cat) => (
+                <label key={cat} className="category-item">
+                    <input
+                    type="checkbox"
+                    value={cat}
+                    checked={selectedCategories.includes(cat)}
+                    onChange={() => handleCategoryChange(cat)}
+                    />
+                    {cat}
+                </label>
+                ))}
+            </div>
             </div>
 
             {/* Markdownエディター */}
@@ -111,38 +129,42 @@ const PostArticle: React.FC = () => {
                 />
             </div>
 
-            {/* メディア追加 */}
-            <div className="media-upload-area">
-                <p>画像や動画をここにドラッグ＆ドロップ、または追加ボタンを使用</p>
+            <div>
                 <input
                     type="file"
+                    ref={fileInputRef}
+                    style={{ display: "block" }}
                     multiple
                     accept="image/*,video/*"
-                    onChange={(e) => handleFileUpload(e.target.files)}
+                    onChange={(e) => {
+                        console.log("onChange triggered", e.target.files);
+                        if (e.target.files) {
+                            console.log("Files selected:", Array.from(e.target.files).map(file => file.name));
+                        } else {
+                            console.log("No files selected");
+                        }
+                        handleFileUpload(e.target.files);
+                    }}
                 />
-                <button
-                    onClick={() =>
-                        document.querySelector<HTMLInputElement>(
-                            ".media-upload-area input[type='file']"
-                        )?.click()
-                    }
-                >
-                    画像・動画を追加
-                </button>
+                <button onClick={handleFileUploadClick}>画像・動画を追加</button>
             </div>
 
             {/* 追加したメディア一覧 */}
-            <div className="media-preview">
-                <h3>追加した画像・動画</h3>
-                {mediaFiles.map((file, index) => (
-                    <div key={index} className="media-item">
-                        <span>{file.name}</span>
-                        <button onClick={() => handleInsertMedia(file)}>
-                            本文に挿入
-                        </button>
-                    </div>
-                ))}
-            </div>
+            {mediaFiles.map((file, index) => (
+                <div key={index} className="media-item">
+                    {file.type.startsWith("image/") && (
+                        <img src={URL.createObjectURL(file)} alt={file.name} width="100" />
+                    )}
+                    {file.type.startsWith("video/") && (
+                        <video src={URL.createObjectURL(file)} controls width="100" />
+                    )}
+                    <span>{file.name}</span>
+                    <button onClick={() => handleInsertMedia(file)}>
+                        本文に挿入
+                    </button>
+                </div>
+            ))}
+
 
             {/* 投稿ボタン */}
             <button onClick={handleSubmit}>記事を投稿する</button>

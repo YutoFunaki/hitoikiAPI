@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import auth
@@ -51,6 +51,7 @@ def get_db():
         db.close()
 
 app = FastAPI()
+UPLOAD_DIRECTORY = "./uploads"
 
 # CORS設定を追加
 origins = [
@@ -108,7 +109,7 @@ def register_user(request: RegisterRequest, db: Session = Depends(get_db)):
 
     return {"message": f"User {new_user.username} created successfully in Firebase and database"}
 
-    
+# ログイン
 @app.post("/login")
 def login(request: LoginRequest):
     try:
@@ -124,6 +125,7 @@ def login(request: LoginRequest):
         # 詳細なエラーメッセージを返す（デバッグ用）
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
     
+# 記事一覧(最新)を取得
 @app.get("/")
 def read_root(db: Session = Depends(get_db)):
     # articles テーブルから最新 30 件を取得
@@ -159,20 +161,10 @@ def read_root(db: Session = Depends(get_db)):
     return result
 
 
-# 記事一覧(最新)を取得する
-@app.get("/articles")
-def get_articles():
-    return {"message": "記事一覧(最新)を取得する"}
-
 # 記事一覧(ランキング)を取得する
 @app.get("/articles/ranking")
 def get_articles():
     return {"message": "記事一覧(ランキング)を取得する"}
-
-# 記事一覧(トレンド)を取得する
-@app.get("/articles/trend")
-def get_articles():
-    return {"message": "記事一覧(トレンド)を取得する"}
 
 # 記事一覧(トレンド)を取得する
 @app.get("/articles/trend")
@@ -367,6 +359,19 @@ def post_comment(article_id: int, request: CommentRequest, db: Session = Depends
         "comment": new_comment.comment,
         "likes": new_comment.comment_likes,
     }}
+
+@app.post("/upload-media/")
+async def upload_media(file: UploadFile = File(...)):
+    if not os.path.exists(UPLOAD_DIRECTORY):
+        os.makedirs(UPLOAD_DIRECTORY)
+    try:
+        file_path = os.path.join(UPLOAD_DIRECTORY, file.filename)
+        async with aiofiles.open(file_path, "wb") as out_file:
+            content = await file.read()
+            await out_file.write(content)
+        return {"filename": file.filename, "url": f"/static/{file.filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="ファイルのアップロードに失敗しました。")
 
 
 # 記事をブックマークする
