@@ -325,19 +325,26 @@ h1 {
   font-weight: bold;
   color: #555;
   margin-bottom: 5px;
+  font-size: 1.3rem;
 }
 
 .comment-body {
-  font-size: 1rem;
+  font-size: 1.2rem;
   line-height: 1.4;
   color: #333;
   margin-bottom: 5px;
+}
+
+.comment-date {
+  font-size: 0.8rem;
+  color: #777;
 }
 
 .comment-footer {
   font-size: 0.9rem;
   color: #777;
 }
+
 .article-author {
   display: flex;
   align-items: center;
@@ -477,11 +484,40 @@ h1 {
 }
 
 .media-preview {
-  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .media-item {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
+  flex-direction: column;
+  align-items: center;
+  width: 120px; /* 最大幅を設定 */
+  text-align: center;
 }
+
+.media-item img,
+.media-item video {
+  max-width: 100%;
+  max-height: 120px; /* 高さを制限 */
+  object-fit: cover; /* アスペクト比を維持しつつ収める */
+  border-radius: 5px; /* 角を少し丸める */
+}
+
+.react-mde-preview img {
+  max-width: 100%;
+  max-height: 300px; /* 必要に応じて調整 */
+  display: block;
+  margin: 10px auto;
+  object-fit: contain; /* アスペクト比を保持 */
+}
+
+.react-mde-preview video {
+  max-width: 100%;
+  max-height: 300px;
+  display: block;
+  margin: 10px auto;
+}
+

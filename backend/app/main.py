@@ -1,8 +1,11 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+import os
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import auth
 from sqlalchemy.orm import Session
+from typing import List
 from app.database import SessionLocal
 from app import models
 from app.models import User
@@ -17,6 +20,8 @@ from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import String, cast
 from datetime import datetime
+import aiofiles
+import json
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -52,6 +57,12 @@ def get_db():
 
 app = FastAPI()
 UPLOAD_DIRECTORY = "./uploads"
+
+# ディレクトリが存在しない場合は作成
+if not os.path.exists(UPLOAD_DIRECTORY):
+    os.makedirs(UPLOAD_DIRECTORY)
+
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
 # CORS設定を追加
 origins = [
@@ -193,10 +204,12 @@ def get_article(id: int, db: Session = Depends(get_db)):
     comments = db.query(ArticleComment).filter(ArticleComment.article_id == id).all()
     comment_data = [
         {
+            "id": comment.id,
             "username": comment.username,
             "user_id": comment.user_id,
             "comment": comment.comment,
             "comment_likes": comment.comment_likes,
+            "created_at": comment.created_at,
         }
         for comment in comments
     ]
@@ -279,7 +292,82 @@ def get_article(article_id: int):
 def get_article(article_id: int):
     return {"message": f"This is an article: {article_id}"}
 
-# 新規記事投稿
+# ファイルアップロード
+@app.post("/upload-media/")
+async def upload_media(file: UploadFile = File(...)):
+    try:
+        file_path = os.path.join(UPLOAD_DIRECTORY, file.filename)
+        
+        async with aiofiles.open(file_path, "wb") as out_file:
+            content = await file.read()
+            await out_file.write(content)
+
+        file_url = f"http://localhost:8000/static/{file.filename}"
+        return {"filename": file.filename, "url": file_url}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="ファイルのアップロードに失敗しました。")
+
+# 記事投稿エンドポイント
+@app.post("/post-article")
+async def post_article(
+    title: str = Form(...),
+    categories: str = Form(...),
+    content: str = Form(...),
+    public_status: str = Form("public"),
+    create_user_id: int = Form(...),
+    files: List[UploadFile] = File([]),  # 画像や動画の添付
+    db: Session = Depends(get_db)
+):
+    """ 記事を投稿 """
+    try:
+        # JSONデコード（カテゴリは文字列として送信されるので変換）
+        category_list = json.loads(categories)
+
+        # 記事データをDBに保存
+        new_article = Article(
+            title=title,
+            category=category_list,
+            content=content,
+            public_status=public_status,
+            create_user_id=create_user_id,
+            created_at=datetime.utcnow(),
+            public_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(new_article)
+        db.commit()
+        db.refresh(new_article)
+
+        # ✅ `history_rating` に初期レコードを追加
+        new_history = HistoryRating(
+            article_id=new_article.id,
+            like_count=0,
+            access_count=0,
+            super_like_count=0
+        )
+        db.add(new_history)
+        db.commit()
+
+        # ファイルのアップロード処理
+        file_urls = []
+        for file in files:
+            file_path = f"./uploads/{file.filename}"
+            with open(file_path, "wb") as buffer:
+                buffer.write(await file.read())
+            file_urls.append(f"http://localhost:8000/static/{file.filename}")
+
+        return {
+            "message": "記事が投稿されました",
+            "article_id": new_article.id,
+            "file_urls": file_urls,
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"記事の投稿に失敗しました: {str(e)}")
+
+# 記事編集
 @app.post("/edit/article")
 def create_article(title: str, content: str, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     """記事を投稿"""
@@ -372,14 +460,33 @@ async def upload_media(file: UploadFile = File(...)):
         return {"filename": file.filename, "url": f"/static/{file.filename}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail="ファイルのアップロードに失敗しました。")
+    
+# コメントにいいね
+@app.post("/comments/{comment_id}/like")
+def like_comment(comment_id: int, user_id: int, db: Session = Depends(get_db)):
+    # コメントが存在するか確認
+    comment = db.query(ArticleComment).filter(ArticleComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="コメントが見つかりませんでした")
+
+    # コメントのいいね数を増やす
+    comment.comment_likes += 1
+
+    db.commit()
+    return {"message": "いいねしました", "like_count": comment.comment_likes}
 
 
-# 記事をブックマークする
+# 記事をブックマークする　優先度低
 @app.post("/articles/{article_id}/bookmark")
 
     
-#  マイページ表示
+#  マイページ表示　優先度高
 @app.get("/mypage/{user_id}")
+def get_mypage(user_id: str):
+    return {"message": f"This is mypage: {user_id}"}
+
+# 閲覧履歴
+@app.get("/mypage/{user_id}/histories")
 def get_mypage(user_id: str):
     return {"message": f"This is mypage: {user_id}"}
 

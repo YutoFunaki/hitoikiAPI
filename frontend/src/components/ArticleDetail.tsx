@@ -4,10 +4,12 @@ import axios from "axios";
 import Articles from "./Articles"; 
 
 interface Comment {
+    id: number;
     username: string;
     user_id: number;
     comment: string;
     comment_likes: number;
+    created_at: string;
 }
 
 interface User {
@@ -107,6 +109,30 @@ const ArticleDetail: React.FC = () => {
             .getHours()
             .toString()
             .padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+    };
+
+    const handleCommentLike = async (commentId: number) => {
+        try {
+            console.log("いいねを押しました:", commentId);
+            const response = await axios.post(
+                `http://localhost:8000/comments/${commentId}/like?user_id=1`,
+                { user_id: 1 } // 仮のユーザーID、認証が必要なら変更
+            );
+    
+            // いいねの更新
+            if (article) {
+                setArticle({
+                    ...article,
+                    comments: article.comments.map((c) =>
+                        c.id === commentId
+                            ? { ...c, comment_likes: response.data.like_count }
+                            : c
+                    ),
+                });
+            }
+        } catch (error) {
+            console.error("コメントのいいねに失敗しました:", error);
+        }
     };
 
     const handleLike = async () => {
@@ -226,8 +252,14 @@ const ArticleDetail: React.FC = () => {
                             <div className="comment-header">
                                 <strong>{comment.username}</strong>
                             </div>
+                            <div className="comment-date">{formatDate(comment.created_at)}</div>
                             <div className="comment-body">{comment.comment}</div>
-                            <div className="comment-footer">👍 {comment.comment_likes} いいね</div>
+                            <div className="comment-footer">
+                                👍 {comment.comment_likes}
+                                <button onClick={() => handleCommentLike(comment.id)}>
+                                    いいね
+                                </button>
+                            </div>
                         </div>
                     ))
                 ) : (
