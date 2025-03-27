@@ -9,6 +9,7 @@ const PostArticle: React.FC = () => {
     const [content, setContent] = useState("");
     const [mediaFiles, setMediaFiles] = useState<{ file: File, url: string }[]>([]);
     const [selectedTab, setSelectedTab] = useState<"write" | "preview">("write");
+    const [uploading, setUploading] = useState<boolean>(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const categories = [
         { id: 1, name: "技術" },
@@ -30,45 +31,87 @@ const PostArticle: React.FC = () => {
             prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId]
         );
     };
-    
 
     const handleFileUpload = async (files: FileList | null) => {
-        if (files) {
-            const validFiles = Array.from(files).filter(file =>
-                ["image/jpeg", "image/png", "video/mp4"].includes(file.type) && file.size <= 10 * 1024 * 1024
-            );
-            if (validFiles.length < files.length) {
-                alert("一部のファイルは無効な形式またはサイズが大きすぎます。");
+        if (!files) return;
+    
+        setUploading(true);
+        const uploadedFiles: { file: File; url: string; type: string }[] = [];
+    
+        for (const file of Array.from(files)) {
+            if (!["image/jpeg", "image/png", "video/mp4", "video/quicktime"].includes(file.type)) {
+                alert(`${file.name} は無効な形式です。`);
+                continue;
             }
-
-            const uploadedFiles = [...mediaFiles];
-
-            for (const file of validFiles) {
-                const formData = new FormData();
-                formData.append("file", file);
-
-                try {
-                    const response = await fetch("http://localhost:8000/upload-media/", {
-                        method: "POST",
-                        body: formData,
-                    });
-
-                    if (!response.ok) throw new Error("アップロードに失敗しました");
-
-                    const data = await response.json();
-                    uploadedFiles.push({ file, url: data.url });
-                } catch (error) {
-                    console.error("ファイルのアップロードに失敗しました:", error);
+    
+            const formData = new FormData();
+            formData.append("file", file);
+    
+            try {
+                const response = await fetch("http://localhost:8000/upload-media/", {
+                    method: "POST",
+                    body: formData,
+                });
+    
+                if (!response.ok) throw new Error("アップロードに失敗しました");
+    
+                const data = await response.json();
+                console.log("アップロード成功:", data.url); // ✅ デバッグ用
+                uploadedFiles.push({ file, url: data.url, type: file.type });
+    
+            } catch (error) {
+                console.error("ファイルアップロードエラー:", error);
+            }
+        }
+    
+        setMediaFiles(prev => [...prev, ...uploadedFiles]);
+        setUploading(false);
+    };    
+    
+    // **画像を圧縮・リサイズする関数**
+    const compressImage = async (file: File, maxWidth: number): Promise<File> => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d")!;
+                
+                let { width, height } = img;
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
                 }
-            }
+    
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+    
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
+                    } else {
+                        resolve(file);
+                    }
+                }, "image/jpeg", 0.8); // 80% の品質で保存
+            };
+        });
+    };
+    
 
-            setMediaFiles(uploadedFiles);
+    const handleInsertMedia = (url: string, type: string) => {
+        if (url.startsWith("blob:")) {
+            alert("アップロードが完了するまで少々お待ちください・・・");
+            return;
+        }
+    
+        if (type.startsWith("video/")) {
+            setContent(prevContent => `${prevContent}\n<video src="${url}" controls style="max-width:100%;"></video>\n`);
+        } else {
+            setContent(prevContent => `${prevContent}\n![Media](${url})\n`);
         }
     };
-
-    const handleInsertMedia = (url: string) => {
-        setContent(prevContent => `${prevContent}\n![Media](${url})\n`);
-    };
+    
 
     const handleSubmit = async () => {
         if (!title || selectedCategories.length === 0 || !content) {
@@ -77,9 +120,14 @@ const PostArticle: React.FC = () => {
         }
     
         try {
-            const userId = 1; // 仮のユーザーID。認証機能を統合する際に動的に設定
-            console.log("送信する create_user_id:", userId);
+            setUploading(true);
+            const userId = localStorage.getItem("userId");
+            if (!userId) {
+            alert("ログインしてください");
+            return;
+            }
             const formData = new FormData();
+            formData.append("create_user_id", userId);
             formData.append("title", title);
             formData.append("categories", JSON.stringify(selectedCategories));
             formData.append("content", content);
@@ -97,6 +145,8 @@ const PostArticle: React.FC = () => {
             alert("記事が投稿されました！");
         } catch (error) {
             console.error("投稿に失敗しました:", error);
+        } finally {
+            setUploading(false);  // ✅ 投稿処理完了
         }
     };
     
@@ -177,25 +227,30 @@ const PostArticle: React.FC = () => {
                     accept="image/*,video/*"
                     onChange={(e) => handleFileUpload(e.target.files)}
                 />
-                <button onClick={handleFileUploadClick}>画像・動画を追加</button>
+                <button onClick={handleFileUploadClick} disabled={uploading}>
+                    {uploading ? "アップロード中..." : "画像・動画を追加"}
+                </button>
             </div>
 
+            {uploading && <p style={{ color: "red" }}>アップロード中...</p>}  {/* ✅ ローディング表示 */}
+
             <div className="media-preview">
-                {mediaFiles.map(({ file, url }, index) => (
+                {mediaFiles.map(({ file, url, type }, index) => (
                     <div key={index} className="media-item">
-                        {file.type.startsWith("image/") && (
+                        {type.startsWith("image/") && (
                             <img src={url} alt={file.name} style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
                         )}
-                        {file.type.startsWith("video/") && (
+                        {type.startsWith("video/") && (
                             <video src={url} controls style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
                         )}
                         <span style={{ fontSize: "12px", marginTop: "5px" }}>{file.name}</span>
-                        <button onClick={() => handleInsertMedia(url)} style={{ fontSize: "12px" }}>
+                        <button onClick={() => handleInsertMedia(url, type)} style={{ fontSize: "12px" }}>
                             本文に挿入
                         </button>
                     </div>
                 ))}
             </div>
+
 
             <button onClick={handleSubmit}>記事を投稿する</button>
         </div>

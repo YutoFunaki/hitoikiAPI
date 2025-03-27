@@ -1,14 +1,35 @@
 import axios from "axios";
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Login: React.FC = () => {
     const [email, setEmail] = useState<string>("");
     const [password, setPassword] = useState<string>("");
+    const [error, setError] = useState<string>("");
+    const navigate = useNavigate();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log("Login with:", email, password);
-        // ログイン処理を追加
+        setError("");
+        try {
+            const response = await axios.post("http://localhost:8000/login", {
+                email: email, // 修正: email フィールドを送信
+                password: password
+            });
+
+            const { token, user } = response.data;
+            localStorage.setItem("authToken", token); // トークンをローカルストレージに保存
+            localStorage.setItem("user", JSON.stringify(user));
+
+            // ログイン後にホームページにリダイレクト
+            navigate("/");
+        } catch (err: any) {
+            // エラーが配列の場合、最初のメッセージを抽出
+            const errorMsg = Array.isArray(err.response?.data?.detail)
+                ? err.response.data.detail[0].msg
+                : err.response?.data?.detail || "ログインに失敗しました";
+            setError(errorMsg);
+        }
     };
 
     return (
@@ -31,6 +52,7 @@ const Login: React.FC = () => {
                 />
                 <button type="submit">ログイン</button>
             </form>
+            {error && <p style={{ color: "red" }}>{error}</p>}
         </div>
     );
 };

@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
+import DOMPurify from "dompurify";
+import Showdown from "showdown";
 import Articles from "./Articles"; 
+import { useAuth } from "../contexts/AuthContext";
+import AuthModal from "../components/AuthModal";
 
 interface Comment {
     id: number;
@@ -34,15 +38,23 @@ interface Article {
 }
 
 // コメント投稿用のコンポーネントを作成
-const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void }> = ({
+const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; onAuthRequired: () => void; }> = ({
     articleId,
     onCommentPosted,
+    onAuthRequired
 }) => {
     const [comment, setComment] = useState<string>("");
     const [error, setError] = useState<string>("");
+    const { isAuthenticated } = useAuth();
 
     const handleCommentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        if (!isAuthenticated) {
+            onAuthRequired();
+            return;
+        }
+        
         if (!comment) {
             setError("コメントを入力してください");
             return;
@@ -85,6 +97,44 @@ const ArticleDetail: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [popupMessage, setPopupMessage] = useState<string | null>(null);
+    const { isAuthenticated } = useAuth();
+    const [showAuthModal, setShowAuthModal] = useState(false);
+
+    // Showdown のコンバーターを設定（GFM 拡張を有効化）
+    const converter = new Showdown.Converter({
+        tables: true,
+        simplifiedAutoLink: true,
+        strikethrough: true, // 打ち消し線対応
+        tasklists: true, 
+        ghCompatibleHeaderId: true,
+        parseImgDimensions: true,
+        literalMidWordUnderscores: true, 
+        emoji: true, 
+        smoothLivePreview: true,
+        openLinksInNewWindow: true,
+        underline: true, // **下線を有効化**
+        backslashEscapesHTMLTags: true,
+        disableForced4SpacesIndentedSublists: true,
+        requireSpaceBeforeHeadingText: true,
+        smartIndentationFix: true,
+        ghCodeBlocks: true, // ✅ GitHub風のコードブロック
+        simpleLineBreaks: true, // ✅ シンプルな改行対応
+    });
+    
+    // 画像タグのサイズを指定
+    converter.addExtension({
+        type: "output",
+        regex: /<img src="(.*?)" alt="(.*?)"(.*?)>/g,
+        replace: '<img src="$1" alt="$2" style="max-width:100%; max-height:300px; display:block; margin:10px auto;" $3 />'
+    }, "imageResizer");
+
+    // 動画タグのサイズを指定
+    converter.addExtension({
+        type: "output",
+        regex: /<video src="(.*?)"(.*?)>/g,
+        replace: '<video src="$1" $2 style="max-width:100%; max-height:300px; display:block; margin:10px auto;"></video>'
+    }, "videoResizer");
+
 
     const fetchArticle = async () => {
         setIsLoading(true);
@@ -112,6 +162,10 @@ const ArticleDetail: React.FC = () => {
     };
 
     const handleCommentLike = async (commentId: number) => {
+        if (!isAuthenticated) {
+            setShowAuthModal(true);
+            return;
+        }
         try {
             console.log("いいねを押しました:", commentId);
             const response = await axios.post(
@@ -136,6 +190,11 @@ const ArticleDetail: React.FC = () => {
     };
 
     const handleLike = async () => {
+        if (!isAuthenticated) {
+            console.log("動いてはいる");
+            setShowAuthModal(true);
+            return;
+        }
         try {
             const likeButton = document.querySelector(".like-button");
             likeButton?.classList.add("like-animation");
@@ -188,6 +247,22 @@ const ArticleDetail: React.FC = () => {
         return <p>記事が見つかりません。</p>;
     }
 
+    // ✅ Markdown を HTML に変換
+    let rawHtml = converter.makeHtml(article.content);
+
+    // ✅ `DOMPurify.sanitize()` を適用（ただし `ALLOWED_TAGS` を調整）
+    const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
+        ALLOWED_TAGS: [
+            "h1", "h2", "h3", "h4", "h5", "h6", "p", "br",
+            "strong", "b", "em", "i", "del", "strike", "code",
+            "blockquote", "pre", "ul", "ol", "li", "a", "img", 
+            "video", "source"
+        ],
+        ALLOWED_ATTR: ["href", "src", "alt", "title", "target", "rel", "controls", "style"]
+    });
+
+    console.log("Converted Markdown to HTML:", sanitizedHtml); // ✅ デバッグ用
+
     return (
         <div className="article-detail">
             <div className="article-detail-header">
@@ -218,7 +293,7 @@ const ArticleDetail: React.FC = () => {
                 )}
             </div>
             <div className="article-content">
-                <p>{article.content}</p>
+            <div className="markdown-content" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
                 <div className="action-buttons">
                     <button className="like-button" onClick={handleLike}>
                         ❤️ <span className="like-count">{article?.like_count}</span>
@@ -266,7 +341,7 @@ const ArticleDetail: React.FC = () => {
                     <p>コメントがありません。</p>
                 )}
             </div>
-            <CommentForm articleId={article.id} onCommentPosted={handleCommentPosted} />
+            <CommentForm articleId={article.id} onCommentPosted={handleCommentPosted} onAuthRequired={() => setShowAuthModal(true)} />
 
             <div className="recommendation-news">
                 {article.user_articles && article.user_articles.length > 0 && (
@@ -277,7 +352,11 @@ const ArticleDetail: React.FC = () => {
                 )}
             </div>
 
+            {showAuthModal && (
+            <AuthModal isOpen={true} onClose={() => setShowAuthModal(false)} />
+            )}
         </div>
+
     );
 };
 
