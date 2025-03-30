@@ -1,6 +1,14 @@
-import firebase_admin
-from firebase_admin import credentials
+import os
+from firebase_admin import credentials, initialize_app, _apps
+from dotenv import load_dotenv
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate("/app/app/firebase/hitoiki-app-firebase-adminsdk-xn0xn-bf68272980.json")
-    firebase_admin.initialize_app(cred)
+# .env を読み込む
+load_dotenv()
+
+# パスを取得
+firebase_cred_path = os.getenv("FIREBASE_CREDENTIAL_PATH")
+
+# 初期化
+if not _apps:
+    cred = credentials.Certificate(firebase_cred_path)
+    initialize_app(cred)

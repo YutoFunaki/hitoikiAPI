@@ -1,0 +1,3 @@
+# Firebase secrets
+app/firebase/*.json
+.env
