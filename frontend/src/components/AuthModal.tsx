@@ -10,6 +10,7 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [introductionText, setIntroductionText] = useState("");
   const [error, setError] = useState("");
 
   if (!isOpen) return null;
@@ -25,8 +26,7 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
           email,
           password,
         });
-        login(res.data.token);
-        localStorage.setItem("userId", res.data.user.id);
+        login(res.data.token, res.data.user);
         onClose();
       } else {
         // 新規登録処理
@@ -34,9 +34,9 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
           email,
           password,
           username,
+          introduction_text: "自己紹介文",
         });
-        login(res.data.token);
-        localStorage.setItem("userId", res.data.user.id);
+        login(res.data.token, res.data.user);
         onClose();
       }
     } catch (err: any) {
@@ -54,8 +54,7 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
         id_token: idToken,
       });
 
-      login(res.data.token);
-      localStorage.setItem("userId", res.data.user.id);
+      login(res.data.token, res.data.user);
       onClose();
     } catch (err) {
       console.error("Googleログイン失敗:", err);
@@ -91,7 +90,7 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
           />
           <input
             type="password"
-            placeholder="パスワード"
+            placeholder="パスワード(6文字以上)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route, useNavigate, useParams } from "react-router-dom";
 import SideMenu from "./SideMenu";
 import Articles from "./Articles";
 import ArticleDetail from "./ArticleDetail";
@@ -8,6 +8,7 @@ import PostArticle from "./PostArticle";
 import RightSidebar from "./RightSidebar";
 import axios from "axios";
 import MyPage from "./MyPage";
+import EditArticle from "./EditArticle";
 
 const Index: React.FC = () => {
     const [articles, setArticles] = useState([]);
@@ -31,6 +32,38 @@ const Index: React.FC = () => {
         };
         fetchArticles();
     }, []);
+
+    const CategoryArticles: React.FC = () => {
+        const { categoryName } = useParams();
+        const [categoryArticles, setCategoryArticles] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState("");
+    
+        useEffect(() => {
+            const fetchByCategory = async () => {
+                try {
+                    const response = await axios.get(`http://localhost:8000/articles/search?category=${encodeURIComponent(categoryName || "")}`);
+                    setCategoryArticles(response.data);
+                } catch (err) {
+                    setError("カテゴリ記事の取得に失敗しました。");
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchByCategory();
+        }, [categoryName]);
+    
+        if (loading) return <p>読み込み中...</p>;
+        if (error) return <p>{error}</p>;
+    
+        return (
+            <Articles
+                articles={categoryArticles}
+                title={`カテゴリ: #${categoryName}`}
+            />
+        );
+    };
+    
 
     // 検索機能の実装
     const handleSearch = async (query: string) => {
@@ -66,6 +99,8 @@ const Index: React.FC = () => {
                         />
                         <Route path="/article/:id" element={<ArticleDetail />} />
                         <Route path="/post-article" element={<PostArticle />} />
+                        <Route path="/edit-article/:id" element={<EditArticle />} />
+                        <Route path="/category/:categoryName" element={<CategoryArticles />} />
                         <Route path="/mypage" element={<MyPage />} />
                     </Routes>
                 </div>

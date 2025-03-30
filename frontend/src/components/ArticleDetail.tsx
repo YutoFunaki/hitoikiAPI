@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import DOMPurify from "dompurify";
 import Showdown from "showdown";
 import Articles from "./Articles"; 
 import { useAuth } from "../contexts/AuthContext";
 import AuthModal from "../components/AuthModal";
+import XLogo from "../assets/x-logo-black.png";
+import ThreadsLogo from "../assets/threads-logo-black.svg";
 
 interface Comment {
     id: number;
@@ -45,12 +47,12 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
 }) => {
     const [comment, setComment] = useState<string>("");
     const [error, setError] = useState<string>("");
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
 
     const handleCommentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!isAuthenticated) {
+        if (!isAuthenticated || !user?.id) {
             onAuthRequired();
             return;
         }
@@ -62,7 +64,7 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
     
         try {
             const response = await axios.post(`http://localhost:8000/articles/${articleId}/comments`, {
-                user_id: 1, // 仮のユーザーID。認証機能を統合する際に動的に設定
+                user_id: user.id,
                 comment,
             });
             console.log("コメント投稿成功:", response.data);
@@ -97,43 +99,41 @@ const ArticleDetail: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [popupMessage, setPopupMessage] = useState<string | null>(null);
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const [showAuthModal, setShowAuthModal] = useState(false);
+    const navigate = useNavigate();
 
-    // Showdown のコンバーターを設定（GFM 拡張を有効化）
     const converter = new Showdown.Converter({
         tables: true,
         simplifiedAutoLink: true,
-        strikethrough: true, // 打ち消し線対応
-        tasklists: true, 
+        strikethrough: true,
+        tasklists: true,
         ghCompatibleHeaderId: true,
-        parseImgDimensions: true,
-        literalMidWordUnderscores: true, 
-        emoji: true, 
+        simpleLineBreaks: true,
+        requireSpaceBeforeHeadingText: true,
+        literalMidWordUnderscores: true,
         smoothLivePreview: true,
+        emoji: true,
+        underline: true,
         openLinksInNewWindow: true,
-        underline: true, // **下線を有効化**
         backslashEscapesHTMLTags: true,
         disableForced4SpacesIndentedSublists: true,
-        requireSpaceBeforeHeadingText: true,
+        ghCodeBlocks: true,
         smartIndentationFix: true,
-        ghCodeBlocks: true, // ✅ GitHub風のコードブロック
-        simpleLineBreaks: true, // ✅ シンプルな改行対応
     });
     
-    // 画像タグのサイズを指定
+    
     converter.addExtension({
         type: "output",
         regex: /<img src="(.*?)" alt="(.*?)"(.*?)>/g,
         replace: '<img src="$1" alt="$2" style="max-width:100%; max-height:300px; display:block; margin:10px auto;" $3 />'
     }, "imageResizer");
-
-    // 動画タグのサイズを指定
+    
     converter.addExtension({
         type: "output",
         regex: /<video src="(.*?)"(.*?)>/g,
         replace: '<video src="$1" $2 style="max-width:100%; max-height:300px; display:block; margin:10px auto;"></video>'
-    }, "videoResizer");
+    }, "videoResizer");    
 
 
     const fetchArticle = async () => {
@@ -162,18 +162,16 @@ const ArticleDetail: React.FC = () => {
     };
 
     const handleCommentLike = async (commentId: number) => {
-        if (!isAuthenticated) {
+        if (!isAuthenticated || !user?.id) {
             setShowAuthModal(true);
             return;
         }
         try {
-            console.log("いいねを押しました:", commentId);
             const response = await axios.post(
-                `http://localhost:8000/comments/${commentId}/like?user_id=1`,
-                { user_id: 1 } // 仮のユーザーID、認証が必要なら変更
+                `http://localhost:8000/comments/${commentId}/like?user_id=${user.id}`,
+                { user_id: user.id }
             );
-    
-            // いいねの更新
+
             if (article) {
                 setArticle({
                     ...article,
@@ -191,7 +189,6 @@ const ArticleDetail: React.FC = () => {
 
     const handleLike = async () => {
         if (!isAuthenticated) {
-            console.log("動いてはいる");
             setShowAuthModal(true);
             return;
         }
@@ -205,9 +202,8 @@ const ArticleDetail: React.FC = () => {
                 setArticle({ ...article, like_count: response.data.like_count });
             }
 
-            // ポップアップメッセージを表示
             setPopupMessage("いいねしました！");
-            setTimeout(() => setPopupMessage(null), 3000); // 3秒後に非表示
+            setTimeout(() => setPopupMessage(null), 3000);
         } catch (error) {
             console.error("いいねに失敗しました:", error);
         }
@@ -247,10 +243,8 @@ const ArticleDetail: React.FC = () => {
         return <p>記事が見つかりません。</p>;
     }
 
-    // ✅ Markdown を HTML に変換
     let rawHtml = converter.makeHtml(article.content);
 
-    // ✅ `DOMPurify.sanitize()` を適用（ただし `ALLOWED_TAGS` を調整）
     const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
         ALLOWED_TAGS: [
             "h1", "h2", "h3", "h4", "h5", "h6", "p", "br",
@@ -261,12 +255,24 @@ const ArticleDetail: React.FC = () => {
         ALLOWED_ATTR: ["href", "src", "alt", "title", "target", "rel", "controls", "style"]
     });
 
-    console.log("Converted Markdown to HTML:", sanitizedHtml); // ✅ デバッグ用
-
     return (
         <div className="article-detail">
             <div className="article-detail-header">
                 <h1 className="article-title">{article.title}</h1>
+                {article.category && article.category.length > 0 && (
+                    <div className="article-categories">
+                    {article.category.map((cat, index) => (
+                        <span
+                        key={index}
+                        className="category-tag"
+                        onClick={() => navigate(`/category/${encodeURIComponent(cat)}`)}
+                        style={{ cursor: "pointer", color: "#3b82f6" }}
+                        >
+                        #{cat}
+                        </span>
+                    ))}
+                    </div>
+                )}
                 <div className="article-detail-meta">
                     <div className="article-author">
                         <img
@@ -282,25 +288,46 @@ const ArticleDetail: React.FC = () => {
                         <span>📅 {formatDate(article.public_at)}</span>
                     </div>
                 </div>
-                {article.thumbnail_url && (
-                    <div className="article-thumbnail-container">
-                        <img
-                            src={article.thumbnail_url}
-                            alt={article.title}
-                            className="article-thumbnail"
-                        />
-                    </div>
-                )}
             </div>
+            {isAuthenticated && article.user.id === user?.id && (
+                <button
+                    onClick={() => navigate(`/edit-article/${article.id}`)}
+                    className="edit-button"
+                    style={{ marginTop: "1rem", padding: "0.5rem 1rem", borderRadius: "5px" }}
+                >
+                    編集
+                </button>
+            )}
             <div className="article-content">
-            <div className="markdown-content" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+                <div className="markdown-content" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
                 <div className="action-buttons">
                     <button className="like-button" onClick={handleLike}>
                         ❤️ <span className="like-count">{article?.like_count}</span>
                     </button>
-                    <button className="share-button" onClick={handleShare}>
-                        🔗
-                    </button>
+
+                    <div className="share-buttons">
+                        <p>この記事をシェアする:</p>
+
+                        {/* X（旧Twitter） */}
+                        <a
+                            href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(article.title + " #calime_news\n")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="share-icon"
+                        >
+                            <img src={XLogo} alt="Share on X" />
+                        </a>
+
+                        {/* Threads */}
+                        <a
+                            href={`https://www.threads.net/intent/post?text=${encodeURIComponent(article.title + " #calmie_news\n" + window.location.href)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="share-icon"
+                        >
+                            <img src={ThreadsLogo} alt="Share on Threads" />
+                        </a>
+                    </div>
                 </div>
             </div>
 

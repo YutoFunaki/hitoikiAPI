@@ -779,3 +779,80 @@ h1 {
   margin: 0 auto;
   
 }
+
+
+
+.share-buttons {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.share-buttons p {
+  margin: 0 0 4px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.share-icon {
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.share-icon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  vertical-align: middle;
+  transition: transform 0.2s ease;
+}
+
+.share-icon img:hover {
+  transform: scale(1.1);
+}
+
+.tag-input-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
+.tag {
+  background: #e0e0e0;
+  padding: 4px 8px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.tag button {
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+}
+.article-categories {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.category-tag {
+  background-color: #f1f5f9;
+  color: #1f2937;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+
+.mde-header-group {
+  display: none !important; 
+}

@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import AuthModal from "../components/AuthModal"; 
+import { useAuth } from "../contexts/AuthContext";
 import { FaSearch, FaCode, FaBusinessTime, FaLeaf, FaChevronLeft, FaChevronRight } from "react-icons/fa";
 
 const RightSidebar: React.FC<{ onSearch: (query: string) => void }> = ({ onSearch }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [isOpen, setIsOpen] = useState(window.innerWidth > 960); // 初期状態をPCで開いた状態にする
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuth(); // 認証状態を取得
+    const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+
+    const handlePostButtonClick = () => {
+        if (isAuthenticated) {
+          navigate("/post-article");
+        } else {
+          setAuthModalOpen(true);
+        }
+    };
 
     // ウィンドウサイズ変更時に開閉状態を自動調整
     useEffect(() => {
@@ -51,9 +63,11 @@ const RightSidebar: React.FC<{ onSearch: (query: string) => void }> = ({ onSearc
             </div>
 
             {/* 投稿するボタン（常に表示） */}
-            <button className="post-article-button" onClick={() => navigate("/post-article")}>
+            <button className="post-article-button" onClick={handlePostButtonClick}>
                 ✏️ 
             </button>
+
+            <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
         </>
     );
 };

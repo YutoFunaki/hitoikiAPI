@@ -23,6 +23,7 @@ from sqlalchemy import String, cast, or_
 from datetime import datetime, timedelta
 import aiofiles
 import json
+import shutil
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # JWT 設定
@@ -54,6 +55,7 @@ class RegisterRequest(BaseModel):
     password: Optional[str] = None  # **🔹 Google / Apple の場合は `None` を許容**
     username: str
     prefectures: Optional[int] = None
+    introduction_text: Optional[str] = None
 
 # コメントのリクエストボディスキーマ
 class CommentRequest(BaseModel):
@@ -106,14 +108,15 @@ def register_user(request: RegisterRequest, db: Session = Depends(get_db)):
     firebase_user_id = None
     try:
         firebase_data = {"email": request.email, "display_name": request.username}
-        if request.password:  # Google / Apple の場合 `password` を登録しない
+        if request.password:
             firebase_data["password"] = request.password
         firebase_user = auth.create_user(**firebase_data)
         firebase_user_id = firebase_user.uid
     except auth.EmailAlreadyExistsError:
         raise HTTPException(status_code=400, detail="Email is already registered in Firebase")
-    except Exception:
-        pass  # Firebase登録に失敗しても続行
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ユーザー作成に失敗しました: {str(e)}")
+
 
     # 🔹 Google / Apple の場合は `password_hash` を `None` にする
     password_hash = pwd_context.hash(request.password) if request.password else None
@@ -126,6 +129,7 @@ def register_user(request: RegisterRequest, db: Session = Depends(get_db)):
         display_name=request.username,
         prefectures=request.prefectures,
         email=request.email,
+        introduction_text=request.introduction_text,
         points=0,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
@@ -149,6 +153,7 @@ def register_user(request: RegisterRequest, db: Session = Depends(get_db)):
             "username": new_user.username,
             "display_name": new_user.display_name,
             "user_icon": new_user.user_icon,
+            "introduction_text": new_user.introduction_text,
         }
     }
 
@@ -219,6 +224,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
                         "username": db_user.username,
                         "display_name": db_user.display_name,
                         "user_icon": db_user.user_icon,
+                        "introduction_text": db_user.introduction_text,
                     }
                 }
         except Exception:
@@ -239,6 +245,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
                 "username": db_user.username,
                 "display_name": db_user.display_name,
                 "user_icon": db_user.user_icon,
+                "introduction_text": db_user.introduction_text,
             }
         }
 
@@ -272,6 +279,7 @@ def read_root(db: Session = Depends(get_db)):
             "id": article.id,
             "title": article.title,
             "content": article.content,
+            "thumbnail_url": article.thumbnail_image,
             "public_at": article.public_at,
             "like_count": history.like_count if history else 0,
             "access_count": history.access_count if history else 0,
@@ -290,6 +298,24 @@ def get_articles():
 def get_articles():
     return {"message": "記事一覧(トレンド)を取得する"}
 
+@app.get("/articles/search")
+def search_articles(category: Optional[str] = None, query: Optional[str] = None, db: Session = Depends(get_db)):
+    base_query = db.query(Article)
+
+    if category:
+        base_query = base_query.filter(Article.category.any(category))
+    elif query:
+        base_query = base_query.filter(
+            or_(
+                Article.title.ilike(f"%{query}%"),
+                Article.content.ilike(f"%{query}%"),
+                Article.category.any(query)
+            )
+        )
+
+    return base_query.order_by(Article.public_at.desc()).all()
+
+
 # 記事一つ(セレクトしたもの)を取得する、このときに閲覧数を増やす、限定公開の場合はログインが必要
 @app.get("/articles/{id}")
 def get_article(id: int, db: Session = Depends(get_db)):
@@ -298,10 +324,18 @@ def get_article(id: int, db: Session = Depends(get_db)):
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    # history_rating から like_count と access_count を取得
+    # 閲覧数・いいね数などの履歴情報取得 or 初期化
     history = db.query(HistoryRating).filter(HistoryRating.article_id == article.id).first()
-    like_count = history.like_count if history else 0
-    access_count = history.access_count if history else 0
+    if not history:
+        history = HistoryRating(article_id=article.id, like_count=0, access_count=1)
+        db.add(history)
+    else:
+        history.access_count += 1
+    db.commit()
+    db.refresh(history)
+
+    like_count = history.like_count
+    access_count = history.access_count
 
     # 記事の作成者情報を取得
     user = db.query(User).filter(User.id == article.create_user_id).first()
@@ -327,7 +361,7 @@ def get_article(id: int, db: Session = Depends(get_db)):
     if not primary_category_number:
         raise HTTPException(status_code=404, detail="No category found for the article")
 
-    # 同じカテゴリの記事を取得
+    # 同じカテゴリの記事
     recommended_articles = []
     related_articles = db.query(Article).filter(
         Article.id != id,
@@ -337,7 +371,6 @@ def get_article(id: int, db: Session = Depends(get_db)):
     for art in related_articles:
         related_history = db.query(HistoryRating).filter(HistoryRating.article_id == art.id).first()
         comment_count = db.query(ArticleComment).filter(ArticleComment.article_id == art.id).count()
-
         recommended_articles.append({
             "id": art.id,
             "title": art.title,
@@ -348,7 +381,7 @@ def get_article(id: int, db: Session = Depends(get_db)):
             "comment_count": comment_count,
         })
 
-    # 他のユーザーの記事を取得
+    # 他のユーザーの記事
     user_articles = []
     other_articles = db.query(Article).filter(
         Article.create_user_id == user.id, Article.id != id
@@ -357,7 +390,6 @@ def get_article(id: int, db: Session = Depends(get_db)):
     for art in other_articles:
         user_history = db.query(HistoryRating).filter(HistoryRating.article_id == art.id).first()
         comment_count = db.query(ArticleComment).filter(ArticleComment.article_id == art.id).count()
-
         user_articles.append({
             "id": art.id,
             "title": art.title,
@@ -368,7 +400,6 @@ def get_article(id: int, db: Session = Depends(get_db)):
             "comment_count": comment_count,
         })
 
-    # 結果を整形して返す
     return {
         "id": article.id,
         "title": article.title,
@@ -376,6 +407,7 @@ def get_article(id: int, db: Session = Depends(get_db)):
         "thumbnail_url": article.thumbnail_image,
         "like_count": like_count,
         "access_count": access_count,
+        "category": article.category,
         "public_at": article.public_at,
         "comments": comment_data,
         "user": {
@@ -388,17 +420,8 @@ def get_article(id: int, db: Session = Depends(get_db)):
         "recommended_articles": recommended_articles,
     }
 
+
 # 以下ログインが必要なエンドポイント
-
-# 自分が作成した記事を編集する
-@app.get("/edit/article/{article_id}")
-def get_article(article_id: int):
-    return {"message": f"This is an article: {article_id}"}
-
-# 自分が作成した記事の編集を保存する
-@app.post("/edit/article/{article_id}")
-def get_article(article_id: int):
-    return {"message": f"This is an article: {article_id}"}
 
 # ファイルアップロード
 @app.post("/upload/media/")
@@ -457,6 +480,7 @@ async def post_article(
     content: str = Form(...),
     public_status: str = Form("public"),
     create_user_id: int = Form(...),
+    thumbnail: Optional[UploadFile] = File(None),
     files: List[UploadFile] = File([]),  # 画像や動画の添付
     db: Session = Depends(get_db)
 ):
@@ -465,11 +489,26 @@ async def post_article(
         # JSONデコード（カテゴリは文字列として送信されるので変換）
         category_list = json.loads(categories)
 
+        if thumbnail:
+            ext = thumbnail.filename.split(".")[-1].lower()
+            unique_name = f"{uuid.uuid4()}.{ext}"
+            thumb_path = os.path.join(UPLOAD_DIRECTORY, unique_name)
+
+            thumbnail_content = await thumbnail.read()  # ✅ 一度だけ読み込む
+            async with aiofiles.open(thumb_path, "wb") as f:
+                await f.write(thumbnail_content)
+
+            thumbnail_url = f"http://localhost:8000/static/{unique_name}"
+        else:
+            thumbnail_url = None
+
+
         # 記事データをDBに保存
         new_article = Article(
             title=title,
             category=category_list,
             content=content,
+            thumbnail_image=thumbnail_url,
             public_status=public_status,
             create_user_id=create_user_id,
             created_at=datetime.utcnow(),
@@ -513,28 +552,81 @@ async def post_article(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"記事の投稿に失敗しました: {str(e)}")
 
-# 記事編集
-@app.post("/edit/article")
-def create_article(title: str, content: str, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    """記事を投稿"""
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
+@app.get("/edit-article/{article_id}")
+def get_article(article_id: int, db: Session = Depends(get_db)):
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="記事が見つかりません")
 
-        new_article = models.Article(
-            title=title,
-            content=content,
-            author_id=user_id  # 投稿者のユーザーID
-        )
-        db.add(new_article)
-        db.commit()
-        db.refresh(new_article)
-        return {"message": "Article created successfully", "article": new_article}
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
+    user = db.query(User).filter(User.id == article.create_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+
+    return {
+        "id": article.id,
+        "title": article.title,
+        "content": article.content,
+        "public_status": article.public_status,
+        "categories": article.category,  # ARRAY(String)
+        "user_id": article.create_user_id,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "user_icon": user.user_icon,
+        }
+    }
+
+
+# 記事編集
+@app.post("/edit-article/{article_id}")
+async def edit_article(
+    article_id: int,
+    title: str = Form(...),
+    content: str = Form(...),
+    categories: str = Form(...),
+    public_status: str = Form(...),
+    update_user_id: int = Form(...),
+    files: Optional[List[UploadFile]] = File(None),
+    db: Session = Depends(get_db)
+):
+    import json
+    from datetime import datetime
+
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="記事が見つかりません")
+
+    article.title = title
+    article.content = content
+    article.public_status = public_status
+    article.update_user_id = update_user_id
+    article.updated_at = datetime.utcnow()
+
+    parsed_categories = json.loads(categories)
+    article.category = [str(cat_id) for cat_id in parsed_categories]
+
+    # メディア保存
+    UPLOAD_DIRECTORY = "static"
+    os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
+
+    if files:
+        saved_paths = []
+        for file in files:
+            extension = file.filename.split(".")[-1].lower()
+            unique_filename = f"{uuid.uuid4()}.{extension}"
+            file_path = os.path.join(UPLOAD_DIRECTORY, unique_filename)
+
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+            saved_paths.append(f"/static/{unique_filename}")
+        
+        article.content_image = saved_paths
+
+    db.commit()
+    db.refresh(article)
+    return {"message": "記事が更新されました", "article_id": article.id}
+
 # 記事にいいね
 @app.post("/articles/{id}/like")
 def like_article(id: int, db: Session = Depends(get_db)):
@@ -640,15 +732,28 @@ def get_mypage(user_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
-    article_data = [
-        {
+    article_data = []
+    for article in articles:
+        history = (
+            db.query(HistoryRating)
+            .filter(HistoryRating.article_id == article.id)
+            .first()
+        )
+        comment_count = (
+            db.query(ArticleComment)
+            .filter(ArticleComment.article_id == article.id)
+            .count()
+        )
+
+        article_data.append({
             "id": article.id,
             "title": article.title,
             "thumbnail_url": article.thumbnail_image,
             "public_at": article.public_at,
-        }
-        for article in articles
-    ]
+            "like_count": history.like_count if history else 0,
+            "access_count": history.access_count if history else 0,
+            "comment_count": comment_count,
+        })
 
     return {
         "user": {
