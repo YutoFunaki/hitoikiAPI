@@ -5,12 +5,10 @@ import Showdown from "showdown";
 import "react-mde/lib/styles/css/react-mde-all.css";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
 const EditArticle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-
+  const API_URL = import.meta.env.VITE_API_BASE_URL;
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);

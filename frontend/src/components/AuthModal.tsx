@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/authContext";
 import axios from "axios";
-import { GoogleAuthProvider, signInWithPopup, getAuth } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup} from "firebase/auth";
 import { auth } from "../firebase";
 
 const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
@@ -10,8 +10,8 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
-  const [introductionText, setIntroductionText] = useState("");
   const [error, setError] = useState("");
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   if (!isOpen) return null;
 
@@ -22,7 +22,7 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
     try {
       if (isLoginMode) {
         // ログイン処理
-        const res = await axios.post("http://localhost:8000/login", {
+        const res = await axios.post(`${API_BASE_URL}/login`, {
           email,
           password,
         });
@@ -30,7 +30,7 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
         onClose();
       } else {
         // 新規登録処理
-        const res = await axios.post("http://localhost:8000/register", {
+        const res = await axios.post(`${API_BASE_URL}/register`, {
           email,
           password,
           username,
@@ -50,7 +50,7 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
 
-      const res = await axios.post("http://localhost:8000/oauth-login", {
+      const res = await axios.post(`${API_BASE_URL}/oauth-login`, {
         id_token: idToken,
       });
 

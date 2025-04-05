@@ -3,11 +3,11 @@ import { Routes, Route, useNavigate, useParams } from "react-router-dom";
 import SideMenu from "./SideMenu";
 import Articles from "./Articles";
 import ArticleDetail from "./ArticleDetail";
-import Header from "./Header";
+import Header from "./header";
 import PostArticle from "./PostArticle";
 import RightSidebar from "./RightSidebar";
 import axios from "axios";
-import MyPage from "./MyPage";
+import MyPage from "./Mypage";
 import EditArticle from "./EditArticle";
 
 const Index: React.FC = () => {
@@ -17,11 +17,12 @@ const Index: React.FC = () => {
     const [filteredArticles, setFilteredArticles] = useState([]);
     const [articlesTitle, setArticlesTitle] = useState("最新の記事"); // タイトル用ステート追加
     const navigate = useNavigate();
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
     useEffect(() => {
         const fetchArticles = async () => {
             try {
-                const response = await axios.get("http://localhost:8000/");
+                const response = await axios.get(`${API_BASE_URL}`);
                 setArticles(response.data);
                 setFilteredArticles(response.data);
             } catch (err) {
@@ -42,7 +43,7 @@ const Index: React.FC = () => {
         useEffect(() => {
             const fetchByCategory = async () => {
                 try {
-                    const response = await axios.get(`http://localhost:8000/articles/search?category=${encodeURIComponent(categoryName || "")}`);
+                    const response = await axios.get(`${API_BASE_URL}/articles/search?category=${encodeURIComponent(categoryName || "")}`);
                     setCategoryArticles(response.data);
                 } catch (err) {
                     setError("カテゴリ記事の取得に失敗しました。");
@@ -75,7 +76,7 @@ const Index: React.FC = () => {
         }
 
         try {
-            const response = await axios.get(`http://localhost:8000/search`, {
+            const response = await axios.get(`${API_BASE_URL}/search`, {
                 params: { query }
             });
             setFilteredArticles(response.data);

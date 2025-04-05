@@ -9,13 +9,14 @@ const Register: React.FC = () => {
     const [prefectures, setPrefectures] = useState<number | "">("");
     const [error, setError] = useState<string>("");
     const [success, setSuccess] = useState<string>("");
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
         setSuccess("");
         try {
-            const response = await axios.post("http://localhost:8000/register", {
+            const response = await axios.post(`${API_BASE_URL}/register`, {
                 email,
                 password,
                 username,

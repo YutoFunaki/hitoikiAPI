@@ -4,7 +4,7 @@ import axios from "axios";
 import DOMPurify from "dompurify";
 import Showdown from "showdown";
 import Articles from "./Articles"; 
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/authContext";
 import AuthModal from "../components/AuthModal";
 import XLogo from "../assets/x-logo-black.png";
 import ThreadsLogo from "../assets/threads-logo-black.svg";
@@ -37,6 +37,8 @@ interface Article {
     user: User; // ユーザー情報
     user_articles: Article[]; // 同じユーザーの他の記事
     recommended_articles: Article[]; // おすすめ記事
+    category?: string[];
+    comment_count: number; // コメント数
 }
 
 // コメント投稿用のコンポーネントを作成
@@ -45,6 +47,7 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
     onCommentPosted,
     onAuthRequired
 }) => {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
     const [comment, setComment] = useState<string>("");
     const [error, setError] = useState<string>("");
     const { isAuthenticated, user } = useAuth();
@@ -63,7 +66,7 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
         }
     
         try {
-            const response = await axios.post(`http://localhost:8000/articles/${articleId}/comments`, {
+            const response = await axios.post(`${API_BASE_URL}/articles/${articleId}/comments`, {
                 user_id: user.id,
                 comment,
             });
@@ -98,10 +101,11 @@ const ArticleDetail: React.FC = () => {
     const [article, setArticle] = useState<Article | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const [popupMessage, setPopupMessage] = useState<string | null>(null);
+    const [, setPopupMessage] = useState<string | null>(null);
     const { isAuthenticated, user } = useAuth();
     const [showAuthModal, setShowAuthModal] = useState(false);
     const navigate = useNavigate();
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
     const converter = new Showdown.Converter({
         tables: true,
@@ -139,7 +143,7 @@ const ArticleDetail: React.FC = () => {
     const fetchArticle = async () => {
         setIsLoading(true);
         try {
-            const response = await axios.get(`http://localhost:8000/articles/${id}`);
+            const response = await axios.get(`${API_BASE_URL}/articles/${id}`);
             setArticle(response.data);
         } catch (err: any) {
             console.error("Failed to fetch data:", err);
@@ -168,7 +172,7 @@ const ArticleDetail: React.FC = () => {
         }
         try {
             const response = await axios.post(
-                `http://localhost:8000/comments/${commentId}/like?user_id=${user.id}`,
+                `${API_BASE_URL}/comments/${commentId}/like?user_id=${user.id}`,
                 { user_id: user.id }
             );
 
@@ -197,7 +201,7 @@ const ArticleDetail: React.FC = () => {
             likeButton?.classList.add("like-animation");
             setTimeout(() => likeButton?.classList.remove("like-animation"), 300);
 
-            const response = await axios.post(`http://localhost:8000/articles/${article?.id}/like`);
+            const response = await axios.post(`${API_BASE_URL}/articles/${article?.id}/like`);
             if (article) {
                 setArticle({ ...article, like_count: response.data.like_count });
             }
@@ -211,19 +215,6 @@ const ArticleDetail: React.FC = () => {
 
     const handleCommentPosted = async () => {
         await fetchArticle();
-    };
-
-    const handleShare = () => {
-        const currentUrl = window.location.href;
-        navigator.clipboard
-            .writeText(currentUrl)
-            .then(() => {
-                setPopupMessage("記事のURLをコピーしました！");
-                setTimeout(() => setPopupMessage(null), 3000);
-            })
-            .catch((error) => {
-                console.error("URLのコピーに失敗しました:", error);
-            });
     };
 
     if (isLoading) {

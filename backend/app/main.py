@@ -24,12 +24,22 @@ from datetime import datetime, timedelta
 import aiofiles
 import json
 import shutil
+from dotenv import load_dotenv
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # JWT 設定
 SECRET_KEY = "your_secret_key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # トークンの有効期限
+
+# ローカル or 本番環境に応じて適切な .env を読み込む
+ENV = os.getenv("ENV", "development")
+if ENV == "production":
+    load_dotenv(".env.production")
+else:
+    load_dotenv(".env")
+
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 # **✅ JWTトークン作成関数**
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -464,7 +474,7 @@ async def upload_media(file: UploadFile = File(...)):
                 content = await file.read()
                 await out_file.write(content)
 
-        file_url = f"http://localhost:8000/static/{new_filename}"
+        file_url = f"{BASE_URL}/static/{new_filename}"
         return {"filename": new_filename, "url": file_url}
 
     except HTTPException as http_err:
@@ -498,7 +508,7 @@ async def post_article(
             async with aiofiles.open(thumb_path, "wb") as f:
                 await f.write(thumbnail_content)
 
-            thumbnail_url = f"http://localhost:8000/static/{unique_name}"
+            thumbnail_url = f"{BASE_URL}/static/{unique_name}"
         else:
             thumbnail_url = None
 
@@ -540,7 +550,7 @@ async def post_article(
                 content = await file.read()
                 await buffer.write(content)
 
-            file_urls.append(f"http://localhost:8000/static/{unique_filename}")
+            file_urls.append(f"{BASE_URL}/static/{unique_filename}")
 
         return {
             "message": "記事が投稿されました",
@@ -799,7 +809,7 @@ async def edit_user(
             await out_file.write(content)
 
         # URLに設定
-        user.user_icon = f"http://localhost:8000/static/{filename}"
+        user.user_icon = f"{BASE_URL}/static/{filename}"
         print(f"✅ 保存完了: user_icon = {user.user_icon}")
     else:
         print("🕳 ユーザーアイコンは未変更")

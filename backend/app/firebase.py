@@ -3,7 +3,7 @@ from firebase_admin import credentials, initialize_app, _apps
 from dotenv import load_dotenv
 
 # .env を読み込む
-load_dotenv()
+load_dotenv(dotenv_path=".env.production")
 
 # パスを取得
 firebase_cred_path = os.getenv("FIREBASE_CREDENTIAL_PATH")

@@ -7,12 +7,13 @@ const Login: React.FC = () => {
     const [password, setPassword] = useState<string>("");
     const [error, setError] = useState<string>("");
     const navigate = useNavigate();
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
         try {
-            const response = await axios.post("http://localhost:8000/login", {
+            const response = await axios.post(`${API_BASE_URL}/login`, {
                 email: email, // 修正: email フィールドを送信
                 password: password
             });

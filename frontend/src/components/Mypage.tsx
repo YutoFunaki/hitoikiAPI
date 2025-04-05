@@ -1,15 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Link } from "react-router-dom";
 import ArticleCard from "./ArticleCard"; // adjust path as necessary
-import { useAuth } from "../contexts/AuthContext";
-
-interface User {
-  id: number;
-  username: string;
-  user_icon: string;
-  introduction_text: string;
-}
+import { useAuth } from "../contexts/authContext";
 
 interface Article {
   id: number;
@@ -19,22 +11,24 @@ interface Article {
   comment_count: number;
   access_count: number;
   public_at: string;
+  category?: string[];
 }
 
 const MyPage: React.FC = () => {
-  const { user, isAuthenticated, login } = useAuth();
+  const { user, login } = useAuth();
   const [articles, setArticles] = useState<Article[]>([]);
   const [editing, setEditing] = useState(false);
   const [editedUsername, setEditedUsername] = useState("");
   const [editedIntro, setEditedIntro] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   useEffect(() => {
     if (!user?.id) return;
     
     axios
-      .get(`http://localhost:8000/mypage/${user.id}`)
+      .get(`${API_BASE_URL}/mypage/${user.id}`)
       .then((res) => {
         setEditedUsername(res.data.user.username);
         setEditedIntro(res.data.user.introduction_text || "");
@@ -52,9 +46,9 @@ const MyPage: React.FC = () => {
     if (selectedFile) formData.append("user_icon", selectedFile);
   
     try {
-      await axios.post(`http://localhost:8000/mypage/${user.id}`, formData);
+      await axios.post(`${API_BASE_URL}/mypage/${user.id}`, formData);
   
-      const res = await axios.get(`http://localhost:8000/mypage/${user.id}`);
+      const res = await axios.get(`${API_BASE_URL}/mypage/${user.id}`);
       setEditedUsername(res.data.user.username);
       setEditedIntro(res.data.user.introduction_text || "");
       setArticles(res.data.articles);

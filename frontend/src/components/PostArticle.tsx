@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import ReactMde from "react-mde";
 import Showdown from "showdown";
 import "react-mde/lib/styles/css/react-mde-all.css";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/authContext";
 
 const PostArticle: React.FC = () => {
     const [title, setTitle] = useState("");
@@ -15,8 +15,7 @@ const PostArticle: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { user, isAuthenticated } = useAuth();
     const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const API_URL = import.meta.env.VITE_API_BASE_URL;
 
     const handleFileUploadClick = () => {
         fileInputRef.current?.click();
@@ -105,7 +104,9 @@ const PostArticle: React.FC = () => {
             formData.append("create_user_id", user.id.toString());
             formData.append("title", title);
             formData.append("categories", JSON.stringify(selectedCategories));
-            formData.append("thumbnail", thumbnailFile);
+            if (thumbnailFile) {
+                formData.append("thumbnail", thumbnailFile);
+            }
             formData.append("content", content);
             formData.append("public_status", "public");
             mediaFiles.forEach(({ file }) => formData.append("files", file));

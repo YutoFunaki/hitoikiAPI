@@ -9,6 +9,7 @@ interface Article {
     comment_count: number;
     access_count: number;
     public_at: string;
+    category?: string[];
 }
 
 interface ArticleCardProps {

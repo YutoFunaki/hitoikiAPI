@@ -1,3 +1,13 @@
-# Firebase secrets
-app/firebase/*.json
+# Node modules
+node_modules/
+
+# アップロード済メディア（リモートで管理すべき）
+uploads/
+static/
+
+# 環境変数
 .env
+.env.production
+
+# Firebase秘密鍵
+app/firebase/*.json

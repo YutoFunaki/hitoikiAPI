@@ -3,8 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { MdAccountCircle } from "react-icons/md";
 import { FaCrown, FaHome } from "react-icons/fa";
 import { FaArrowTrendUp } from "react-icons/fa6";
-import { useAuth } from "../contexts/AuthContext";
-import axios from "axios";
+import { useAuth } from "../contexts/authContext";
 
 const SideMenu: React.FC = () => {
     const navigate = useNavigate();
