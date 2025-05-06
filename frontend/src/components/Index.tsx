@@ -17,7 +17,7 @@ const Index: React.FC = () => {
     const [filteredArticles, setFilteredArticles] = useState([]);
     const [articlesTitle, setArticlesTitle] = useState("最新の記事"); // タイトル用ステート追加
     const navigate = useNavigate();
-    const API_BASE_URL = "https://calmie.jp";
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
     useEffect(() => {
         const fetchArticles = async () => {
