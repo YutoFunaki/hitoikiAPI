@@ -18,6 +18,7 @@ const Index: React.FC = () => {
     const [articlesTitle, setArticlesTitle] = useState("最新の記事"); // タイトル用ステート追加
     const navigate = useNavigate();
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    console.log("VITE_API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
 
     useEffect(() => {
         const fetchArticles = async () => {
@@ -31,7 +32,6 @@ const Index: React.FC = () => {
                 setLoading(false);
             }
         };
-        console.log("VITE_API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
         fetchArticles();
     }, []);
 
