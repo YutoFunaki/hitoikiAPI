@@ -13,6 +13,7 @@ services:
       - db
     volumes:
       - ./backend:/app
+      - ./backend/app/firebase/hitoiki-app-firebase-adminsdk-xn0xn-bf68272980.json:/app/app/firebase/hitoiki-app-firebase-adminsdk-xn0xn-bf68272980.json
 
   db:
     image: postgres:15
