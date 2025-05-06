@@ -4,7 +4,7 @@ import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBxbeYImDYJ9lHIWfL-P1dh_c5budaIEB4",
-  authDomain: "hitoiki-app.firebaseapp.com",
+  authDomain: "calmie.jp",
   projectId: "hitoiki-app",
   storageBucket: "hitoiki-app.appspot.com",
   messagingSenderId: "670782940710",
