@@ -9,6 +9,8 @@ import RightSidebar from "./RightSidebar";
 import axios from "axios";
 import MyPage from "./Mypage";
 import EditArticle from "./EditArticle";
+console.log("VITE_API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
+console.log("import.meta.env:", import.meta.env);
 
 const Index: React.FC = () => {
     const [articles, setArticles] = useState([]);
