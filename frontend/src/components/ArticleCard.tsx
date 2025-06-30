@@ -8,7 +8,7 @@ interface Article {
     like_count: number;
     comment_count: number;
     access_count: number;
-    public_at: string;
+    public_at?: string;
     category?: string[];
 }
 

@@ -5,4 +5,16 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   envPrefix: 'VITE_',
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
+  },
+  define: {
+    'process.env.VITE_API_BASE_URL': JSON.stringify('http://localhost:8000')
+  }
 })

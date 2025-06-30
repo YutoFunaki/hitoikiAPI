@@ -11,7 +11,7 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const API_BASE_URL = "http://localhost:8000";
 
   if (!isOpen) return null;
 

@@ -8,7 +8,7 @@ import axios from "axios";
 const EditArticle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_BASE_URL;
+  const API_URL = "http://localhost:8000";
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);

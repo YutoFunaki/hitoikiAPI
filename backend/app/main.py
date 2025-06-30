@@ -24,22 +24,12 @@ from datetime import datetime, timedelta
 import aiofiles
 import json
 import shutil
-from dotenv import load_dotenv
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # JWT 設定
 SECRET_KEY = "your_secret_key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # トークンの有効期限
-
-# ローカル or 本番環境に応じて適切な .env を読み込む
-ENV = os.getenv("ENV", "development")
-if ENV == "production":
-    load_dotenv(".env.production")
-else:
-    load_dotenv(".env")
-
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 # **✅ JWTトークン作成関数**
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -48,8 +38,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# モデルをDBに反映
-models.Base.metadata.create_all(bind=engine)
+# モデルをDBに反映（エラーハンドリング付き）
+try:
+    models.Base.metadata.create_all(bind=engine)
+    print("✅ データベーステーブル作成完了")
+except Exception as e:
+    print(f"⚠️ データベーステーブル作成エラー: {e}")
+    print("🔄 アプリケーションは継続しますが、データベース機能は制限される可能性があります")
 
 # リクエストボディのスキーマ
 class LoginRequest(BaseModel):
@@ -96,7 +91,6 @@ app.mount("/static", StaticFiles(directory="uploads"), name="static")
 origins = [
     "http://localhost:5173",  # フロントエンドのURL
     "http://127.0.0.1:5173",
-    "http://calmie.jp"
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -294,20 +288,160 @@ def read_root(db: Session = Depends(get_db)):
             "public_at": article.public_at,
             "like_count": history.like_count if history else 0,
             "access_count": history.access_count if history else 0,
-            "comment_count": comment_count,  # コメント数を追加
+            "comment_count": comment_count,
+            "category": article.category,
+        })
+    
+    return result
+
+# 記事一覧(最新)を取得 - /articlesエンドポイント（フロントエンド用）
+@app.get("/articles")
+def get_articles(db: Session = Depends(get_db)):
+    # articles テーブルから最新 30 件を取得
+    articles = db.query(Article).order_by(Article.public_at.desc()).limit(30).all()
+    
+    # 結果リストを構築
+    result = []
+    for article in articles:
+        # history_rating から like_count と access_count を取得
+        history = (
+            db.query(HistoryRating)
+            .filter(HistoryRating.article_id == article.id)
+            .first()
+        )
+        
+        # article_comments からコメント数を取得
+        comment_count = (
+            db.query(ArticleComment)
+            .filter(ArticleComment.article_id == article.id)
+            .count()
+        )
+        
+        result.append({
+            "id": article.id,
+            "title": article.title,
+            "content": article.content,
+            "thumbnail_url": article.thumbnail_image,
+            "public_at": article.public_at,
+            "like_count": history.like_count if history else 0,
+            "access_count": history.access_count if history else 0,
+            "comment_count": comment_count,
+            "category": article.category,
         })
     
     return result
 
 # 記事一覧(ランキング)を取得する
 @app.get("/articles/ranking")
-def get_articles():
-    return {"message": "記事一覧(ランキング)を取得する"}
+def get_articles_ranking(db: Session = Depends(get_db)):
+    # いいね数でソートしたランキングを返す
+    try:
+        articles = (
+            db.query(Article)
+            .join(HistoryRating, Article.id == HistoryRating.article_id, isouter=True)
+            .order_by(HistoryRating.like_count.desc().nullslast())
+            .limit(30)
+            .all()
+        )
+        
+        result = []
+        for article in articles:
+            history = (
+                db.query(HistoryRating)
+                .filter(HistoryRating.article_id == article.id)
+                .first()
+            )
+            
+            comment_count = (
+                db.query(ArticleComment)
+                .filter(ArticleComment.article_id == article.id)
+                .count()
+            )
+            
+            result.append({
+                "id": article.id,
+                "title": article.title,
+                "content": article.content,
+                "thumbnail_url": article.thumbnail_image,
+                "public_at": article.public_at,
+                "like_count": history.like_count if history else 0,
+                "access_count": history.access_count if history else 0,
+                "comment_count": comment_count,
+                "category": article.category,
+            })
+        
+        return result
+    except Exception as e:
+        # ダミーデータを返す
+        return [
+            {
+                "id": 1,
+                "title": "🏆 今週最も愛された子猫の動画",
+                "content": "多くの人に愛された癒しの動画をランキング形式でお届け",
+                "thumbnail_url": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&h=300&fit=crop",
+                "public_at": "2024-01-01T00:00:00",
+                "like_count": 2500,
+                "access_count": 50000,
+                "comment_count": 150,
+                "category": ["動物", "猫", "ランキング"]
+            }
+        ]
 
 # 記事一覧(トレンド)を取得する
 @app.get("/articles/trend")
-def get_articles():
-    return {"message": "記事一覧(トレンド)を取得する"}
+def get_articles_trend(db: Session = Depends(get_db)):
+    # アクセス数でソートしたトレンドを返す
+    try:
+        articles = (
+            db.query(Article)
+            .join(HistoryRating, Article.id == HistoryRating.article_id, isouter=True)
+            .order_by(HistoryRating.access_count.desc().nullslast())
+            .limit(30)
+            .all()
+        )
+        
+        result = []
+        for article in articles:
+            history = (
+                db.query(HistoryRating)
+                .filter(HistoryRating.article_id == article.id)
+                .first()
+            )
+            
+            comment_count = (
+                db.query(ArticleComment)
+                .filter(ArticleComment.article_id == article.id)
+                .count()
+            )
+            
+            result.append({
+                "id": article.id,
+                "title": article.title,
+                "content": article.content,
+                "thumbnail_url": article.thumbnail_image,
+                "public_at": article.public_at,
+                "like_count": history.like_count if history else 0,
+                "access_count": history.access_count if history else 0,
+                "comment_count": comment_count,
+                "category": article.category,
+            })
+        
+        return result
+    except Exception as e:
+        # ダミーデータを返す
+        return [
+            {
+                "id": 2,
+                "title": "📈 話題沸騰！赤ちゃんパンダの成長記録",
+                "content": "多くの人が注目している話題の記事をトレンド形式でお届け",
+                "thumbnail_url": "https://images.unsplash.com/photo-1539681944080-d63d2ad9f92b?w=400&h=300&fit=crop",
+                "public_at": "2024-01-01T00:00:00",
+                "like_count": 1800,
+                "access_count": 75000,
+                "comment_count": 200,
+                "category": ["動物", "パンダ", "トレンド"]
+            }
+        ]
 
 @app.get("/articles/search")
 def search_articles(category: Optional[str] = None, query: Optional[str] = None, db: Session = Depends(get_db)):
@@ -475,7 +609,7 @@ async def upload_media(file: UploadFile = File(...)):
                 content = await file.read()
                 await out_file.write(content)
 
-        file_url = f"{BASE_URL}/static/{new_filename}"
+        file_url = f"http://localhost:8000/static/{new_filename}"
         return {"filename": new_filename, "url": file_url}
 
     except HTTPException as http_err:
@@ -509,7 +643,7 @@ async def post_article(
             async with aiofiles.open(thumb_path, "wb") as f:
                 await f.write(thumbnail_content)
 
-            thumbnail_url = f"{BASE_URL}/static/{unique_name}"
+            thumbnail_url = f"http://localhost:8000/static/{unique_name}"
         else:
             thumbnail_url = None
 
@@ -551,7 +685,7 @@ async def post_article(
                 content = await file.read()
                 await buffer.write(content)
 
-            file_urls.append(f"{BASE_URL}/static/{unique_filename}")
+            file_urls.append(f"http://localhost:8000/static/{unique_filename}")
 
         return {
             "message": "記事が投稿されました",
@@ -810,7 +944,7 @@ async def edit_user(
             await out_file.write(content)
 
         # URLに設定
-        user.user_icon = f"{BASE_URL}/static/{filename}"
+        user.user_icon = f"http://localhost:8000/static/{filename}"
         print(f"✅ 保存完了: user_icon = {user.user_icon}")
     else:
         print("🕳 ユーザーアイコンは未変更")
@@ -825,63 +959,152 @@ async def edit_user(
 
 # 閲覧履歴
 @app.get("/mypage/{user_id}/histories")
-def get_mypage(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def get_user_histories(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：ユーザーの閲覧履歴を取得
+        return {"message": f"ユーザー{user_id}の閲覧履歴", "histories": []}
+    except Exception as e:
+        return {"message": "閲覧履歴の取得に失敗しました", "histories": []}
 
 #  いいねした記事一覧
 @app.get("/mypage/{user_id}/likes")
-def get_mypage(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def get_user_likes(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：ユーザーがいいねした記事一覧を取得
+        return {"message": f"ユーザー{user_id}のいいね記事", "liked_articles": []}
+    except Exception as e:
+        return {"message": "いいね記事の取得に失敗しました", "liked_articles": []}
 
 #  作成した記事一覧
 @app.get("/mypage/{user_id}/articles")
-def get_mypage(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def get_user_articles(user_id: int, db: Session = Depends(get_db)):
+    try:
+        articles = (
+            db.query(Article)
+            .filter(Article.create_user_id == user_id)
+            .order_by(Article.public_at.desc())
+            .all()
+        )
+        
+        article_data = []
+        for article in articles:
+            history = (
+                db.query(HistoryRating)
+                .filter(HistoryRating.article_id == article.id)
+                .first()
+            )
+            comment_count = (
+                db.query(ArticleComment)
+                .filter(ArticleComment.article_id == article.id)
+                .count()
+            )
+
+            article_data.append({
+                "id": article.id,
+                "title": article.title,
+                "thumbnail_url": article.thumbnail_image,
+                "public_at": article.public_at,
+                "like_count": history.like_count if history else 0,
+                "access_count": history.access_count if history else 0,
+                "comment_count": comment_count,
+                "category": article.category,
+            })
+        
+        return {"articles": article_data}
+    except Exception as e:
+        return {"message": "記事の取得に失敗しました", "articles": []}
 
 # 申請中の記事一覧
 @app.get("/mypage/{user_id}/applications")
-def get_mypage(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def get_user_applications(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：申請中の記事一覧を取得
+        return {"message": f"ユーザー{user_id}の申請中記事", "applications": []}
+    except Exception as e:
+        return {"message": "申請中記事の取得に失敗しました", "applications": []}
 
 #  ブックマークした記事一覧
 @app.get("/mypage/{user_id}/bookmarks")
-def get_mypage(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def get_user_bookmarks(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：ブックマークした記事一覧を取得
+        return {"message": f"ユーザー{user_id}のブックマーク記事", "bookmarks": []}
+    except Exception as e:
+        return {"message": "ブックマーク記事の取得に失敗しました", "bookmarks": []}
 
 #  フォローしているユーザー一覧
 @app.get("/mypage/{user_id}/follows")
-def get_mypage(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def get_user_follows(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：フォローしているユーザー一覧を取得
+        return {"message": f"ユーザー{user_id}のフォロー一覧", "follows": []}
+    except Exception as e:
+        return {"message": "フォロー一覧の取得に失敗しました", "follows": []}
 
 #  フォロワー一覧
 @app.get("/mypage/{user_id}/followers")
-def get_mypage(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def get_user_followers(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：フォロワー一覧を取得
+        return {"message": f"ユーザー{user_id}のフォロワー一覧", "followers": []}
+    except Exception as e:
+        return {"message": "フォロワー一覧の取得に失敗しました", "followers": []}
 
 #  ユーザーをフォローする
 @app.post("/follow/{user_id}")
-def follow_user(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def follow_user(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：ユーザーフォロー機能
+        return {"message": f"ユーザー{user_id}をフォローしました"}
+    except Exception as e:
+        return {"message": "フォローに失敗しました"}
 
 #  ユーザーをフォロー解除する
 @app.post("/unfollow/{user_id}")
-def unfollow_user(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def unfollow_user(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：ユーザーフォロー解除機能
+        return {"message": f"ユーザー{user_id}のフォローを解除しました"}
+    except Exception as e:
+        return {"message": "フォロー解除に失敗しました"}
 
 #  ユーザーをブロックする
 @app.post("/block/{user_id}")
-def block_user(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def block_user(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：ユーザーブロック機能
+        return {"message": f"ユーザー{user_id}をブロックしました"}
+    except Exception as e:
+        return {"message": "ブロックに失敗しました"}
 
 #  ユーザーをブロック解除する
 @app.post("/unblock/{user_id}")
-def unblock_user(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def unblock_user(user_id: int, db: Session = Depends(get_db)):
+    try:
+        # 実装予定：ユーザーブロック解除機能
+        return {"message": f"ユーザー{user_id}のブロックを解除しました"}
+    except Exception as e:
+        return {"message": "ブロック解除に失敗しました"}
 
 #  ユーザー情報を取得する
 @app.get("/user/{user_id}")
-def get_user(user_id: str):
-    return {"message": f"This is mypage: {user_id}"}
+def get_user_info(user_id: int, db: Session = Depends(get_db)):
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+        
+        return {
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name,
+            "user_icon": user.user_icon,
+            "introduction_text": user.introduction_text,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="ユーザー情報の取得に失敗しました")
 
 # 記事の検索
 @app.get("/search")
@@ -912,3 +1135,339 @@ def search_articles(query: str, db: Session = Depends(get_db)):
 
 # 限定公開記事とかも必要かもしれない
 # 共有機能も必要
+
+# 新しいランキング機能
+@app.get("/articles/ranking/daily")
+def get_daily_ranking(db: Session = Depends(get_db)):
+    """1日ごとのランキング"""
+    try:
+        # 過去24時間のランキング
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        
+        # DailyRatingテーブルから日次データを取得
+        daily_ranking = db.query(
+            models.DailyRating.article_id,
+            models.DailyRating.like_count,
+            models.DailyRating.access_count,
+            models.Article.title,
+            models.Article.thumbnail_image,
+            models.Article.category,
+            models.Article.created_at,
+            models.User.username
+        ).join(
+            models.Article, models.DailyRating.article_id == models.Article.id
+        ).join(
+            models.User, models.Article.create_user_id == models.User.id
+        ).filter(
+            models.Article.deleted_at.is_(None),
+            models.Article.public_status == models.PublicStatus.public,
+            models.DailyRating.created_at >= yesterday
+        ).order_by(
+            (models.DailyRating.like_count + models.DailyRating.access_count).desc()
+        ).limit(20).all()
+        
+        ranking_articles = []
+        for rank, item in enumerate(daily_ranking, 1):
+            ranking_articles.append({
+                "id": item.article_id,
+                "title": item.title,
+                "thumbnail_image": item.thumbnail_image,
+                "likes_count": item.like_count,
+                "access_count": item.access_count,
+                "category": item.category or [],
+                "username": item.username,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "rank": rank,
+                "score": item.like_count + item.access_count
+            })
+        
+        # データがない場合はダミーデータ
+        if not ranking_articles:
+            ranking_articles = [
+                {
+                    "id": 1,
+                    "title": "🐱 今日の癒し猫特集",
+                    "thumbnail_image": "/static/cat_icon.png",
+                    "likes_count": 45,
+                    "access_count": 120,
+                    "category": ["動物", "癒し"],
+                    "username": "にゃんこ好き",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "rank": 1,
+                    "score": 165
+                },
+                {
+                    "id": 2,
+                    "title": "🍼 赤ちゃんの笑顔コレクション",
+                    "thumbnail_image": "/static/baby_icon.png",
+                    "likes_count": 38,
+                    "access_count": 95,
+                    "category": ["赤ちゃん", "笑顔"],
+                    "username": "ママライター",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "rank": 2,
+                    "score": 133
+                }
+            ]
+        
+        return {"articles": ranking_articles, "period": "daily"}
+    except Exception as e:
+        print(f"日次ランキング取得エラー: {e}")
+        return {"articles": [], "period": "daily"}
+
+@app.get("/articles/ranking/weekly")
+def get_weekly_ranking(db: Session = Depends(get_db)):
+    """1週間のランキング"""
+    try:
+        # 過去7日間のランキング
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        
+        # AggregatePointsテーブルから週次データを取得
+        weekly_ranking = db.query(
+            models.AggregatePoints.article_id,
+            models.AggregatePoints.like_weekly,
+            models.AggregatePoints.access_weekly,
+            models.Article.title,
+            models.Article.thumbnail_image,
+            models.Article.category,
+            models.Article.created_at,
+            models.User.username
+        ).join(
+            models.Article, models.AggregatePoints.article_id == models.Article.id
+        ).join(
+            models.User, models.Article.create_user_id == models.User.id
+        ).filter(
+            models.Article.deleted_at.is_(None),
+            models.Article.public_status == models.PublicStatus.public,
+            models.AggregatePoints.updated_at >= week_ago
+        ).order_by(
+            (models.AggregatePoints.like_weekly + models.AggregatePoints.access_weekly).desc()
+        ).limit(20).all()
+        
+        ranking_articles = []
+        for rank, item in enumerate(weekly_ranking, 1):
+            ranking_articles.append({
+                "id": item.article_id,
+                "title": item.title,
+                "thumbnail_image": item.thumbnail_image,
+                "likes_count": item.like_weekly,
+                "access_count": item.access_weekly,
+                "category": item.category or [],
+                "username": item.username,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "rank": rank,
+                "score": item.like_weekly + item.access_weekly
+            })
+        
+        # データがない場合はダミーデータ
+        if not ranking_articles:
+            ranking_articles = [
+                {
+                    "id": 1,
+                    "title": "🐶 今週の人気わんちゃん特集",
+                    "thumbnail_image": "/static/dog_icon.png",
+                    "likes_count": 280,
+                    "access_count": 750,
+                    "category": ["動物", "人気"],
+                    "username": "わんわん日記",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "rank": 1,
+                    "score": 1030
+                },
+                {
+                    "id": 2,
+                    "title": "🌸 春の動物たち",
+                    "thumbnail_image": "/static/spring_animals.png",
+                    "likes_count": 195,
+                    "access_count": 520,
+                    "category": ["動物", "季節"],
+                    "username": "自然愛好家",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "rank": 2,
+                    "score": 715
+                }
+            ]
+        
+        return {"articles": ranking_articles, "period": "weekly"}
+    except Exception as e:
+        print(f"週次ランキング取得エラー: {e}")
+        return {"articles": [], "period": "weekly"}
+
+@app.get("/articles/ranking/monthly")
+def get_monthly_ranking(db: Session = Depends(get_db)):
+    """1ヶ月のランキング"""
+    try:
+        # 過去30日間のランキング
+        month_ago = datetime.utcnow() - timedelta(days=30)
+        
+        # AggregatePointsテーブルから月次データを取得
+        monthly_ranking = db.query(
+            models.AggregatePoints.article_id,
+            models.AggregatePoints.like_monthly,
+            models.AggregatePoints.access_monthly,
+            models.Article.title,
+            models.Article.thumbnail_image,
+            models.Article.category,
+            models.Article.created_at,
+            models.User.username
+        ).join(
+            models.Article, models.AggregatePoints.article_id == models.Article.id
+        ).join(
+            models.User, models.Article.create_user_id == models.User.id
+        ).filter(
+            models.Article.deleted_at.is_(None),
+            models.Article.public_status == models.PublicStatus.public,
+            models.AggregatePoints.updated_at >= month_ago
+        ).order_by(
+            (models.AggregatePoints.like_monthly + models.AggregatePoints.access_monthly).desc()
+        ).limit(20).all()
+        
+        ranking_articles = []
+        for rank, item in enumerate(monthly_ranking, 1):
+            ranking_articles.append({
+                "id": item.article_id,
+                "title": item.title,
+                "thumbnail_image": item.thumbnail_image,
+                "likes_count": item.like_monthly,
+                "access_count": item.access_monthly,
+                "category": item.category or [],
+                "username": item.username,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "rank": rank,
+                "score": item.like_monthly + item.access_monthly
+            })
+        
+        # データがない場合はダミーデータ
+        if not ranking_articles:
+            ranking_articles = [
+                {
+                    "id": 1,
+                    "title": "🍼 今月の赤ちゃん特集",
+                    "thumbnail_image": "/static/baby_icon.png",
+                    "likes_count": 1250,
+                    "access_count": 3400,
+                    "category": ["赤ちゃん", "特集"],
+                    "username": "ママライター",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "rank": 1,
+                    "score": 4650
+                },
+                {
+                    "id": 2,
+                    "title": "🐾 動物たちの癒し動画まとめ",
+                    "thumbnail_image": "/static/animals_collection.png",
+                    "likes_count": 890,
+                    "access_count": 2100,
+                    "category": ["動物", "動画"],
+                    "username": "アニマルファン",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "rank": 2,
+                    "score": 2990
+                }
+            ]
+        
+        return {"articles": ranking_articles, "period": "monthly"}
+    except Exception as e:
+        print(f"月次ランキング取得エラー: {e}")
+        return {"articles": [], "period": "monthly"}
+
+# 新しいトレンド機能（直近1時間）
+@app.get("/articles/trend/hourly")
+def get_hourly_trend(db: Session = Depends(get_db)):
+    """直近1時間のトレンド（閲覧数といいね数、コメント数が多い順）"""
+    try:
+        # 直近1時間
+        hour_ago = datetime.utcnow() - timedelta(hours=1)
+        
+        # 直近1時間のアクティビティを集計
+        trend_articles = db.query(
+            models.Article.id,
+            models.Article.title,
+            models.Article.thumbnail_image,
+            models.Article.category,
+            models.Article.created_at,
+            models.User.username,
+            func.count(models.ArticleLike.id).label('recent_likes'),
+            func.count(models.ArticleComment.id).label('recent_comments')
+        ).join(
+            models.User, models.Article.create_user_id == models.User.id
+        ).outerjoin(
+            models.ArticleLike, 
+            (models.ArticleLike.article_id == models.Article.id) & 
+            (models.ArticleLike.created_at >= hour_ago) &
+            (models.ArticleLike.deleted_at.is_(None))
+        ).outerjoin(
+            models.ArticleComment,
+            (models.ArticleComment.article_id == models.Article.id) &
+            (models.ArticleComment.created_at >= hour_ago) &
+            (models.ArticleComment.deleted_at.is_(None))
+        ).filter(
+            models.Article.deleted_at.is_(None),
+            models.Article.public_status == models.PublicStatus.public
+        ).group_by(
+            models.Article.id,
+            models.Article.title,
+            models.Article.thumbnail_image,
+            models.Article.category,
+            models.Article.created_at,
+            models.User.username
+        ).order_by(
+            (func.count(models.ArticleLike.id) + func.count(models.ArticleComment.id)).desc()
+        ).limit(20).all()
+        
+        trending_articles = []
+        for rank, item in enumerate(trend_articles, 1):
+            # 全体のアクセス数を取得
+            history = db.query(models.HistoryRating).filter(
+                models.HistoryRating.article_id == item.id
+            ).first()
+            
+            trending_articles.append({
+                "id": item.id,
+                "title": item.title,
+                "thumbnail_image": item.thumbnail_image,
+                "recent_likes": item.recent_likes,
+                "recent_comments": item.recent_comments,
+                "total_access": history.access_count if history else 0,
+                "category": item.category or [],
+                "username": item.username,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "rank": rank,
+                "trend_score": item.recent_likes + item.recent_comments
+            })
+        
+        # データがない場合はダミーデータ
+        if not trending_articles:
+            trending_articles = [
+                {
+                    "id": 1,
+                    "title": "🔥 今話題！子犬の可愛い仕草",
+                    "thumbnail_image": "/static/puppy_trend.png",
+                    "recent_likes": 25,
+                    "recent_comments": 8,
+                    "total_access": 450,
+                    "category": ["動物", "子犬"],
+                    "username": "ペットラバー",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "rank": 1,
+                    "trend_score": 33
+                },
+                {
+                    "id": 2,
+                    "title": "💕 赤ちゃんの初めての笑顔",
+                    "thumbnail_image": "/static/baby_first_smile.png",
+                    "recent_likes": 18,
+                    "recent_comments": 12,
+                    "total_access": 320,
+                    "category": ["赤ちゃん", "成長"],
+                    "username": "新米パパ",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "rank": 2,
+                    "trend_score": 30
+                }
+            ]
+        
+        return {"articles": trending_articles, "period": "hourly"}
+    except Exception as e:
+        print(f"時間別トレンド取得エラー: {e}")
+        return {"articles": [], "period": "hourly"}

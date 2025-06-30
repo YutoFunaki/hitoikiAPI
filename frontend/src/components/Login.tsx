@@ -7,7 +7,7 @@ const Login: React.FC = () => {
     const [password, setPassword] = useState<string>("");
     const [error, setError] = useState<string>("");
     const navigate = useNavigate();
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    const API_BASE_URL = "http://localhost:8000";
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

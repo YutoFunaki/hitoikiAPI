@@ -15,7 +15,7 @@ const PostArticle: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { user, isAuthenticated } = useAuth();
     const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-    const API_URL = import.meta.env.VITE_API_BASE_URL;
+    const API_URL = "http://localhost:8000";
 
     const handleFileUploadClick = () => {
         fileInputRef.current?.click();
@@ -160,10 +160,10 @@ const PostArticle: React.FC = () => {
 
     return (
         <div className="post-article-page">
-            <h1>記事を投稿する</h1>
+            <h1>📝 記事を投稿する</h1>
 
             <div className="form-group">
-                <label htmlFor="title">タイトル</label>
+                <label htmlFor="title">📰 タイトル</label>
                 <input
                     id="title"
                     type="text"
@@ -174,7 +174,7 @@ const PostArticle: React.FC = () => {
             </div>
             
             <div className="form-group">
-                <label>サムネイル画像を選択</label>
+                <label>🖼️ サムネイル画像を選択</label>
                 <input
                     type="file"
                     accept="image/*"
@@ -183,10 +183,15 @@ const PostArticle: React.FC = () => {
                         if (file) setThumbnailFile(file);
                     }}
                 />
+                {thumbnailFile && (
+                    <div className="thumbnail-preview">
+                        <p>選択されたファイル: {thumbnailFile.name}</p>
+                    </div>
+                )}
             </div>
 
             <div className="form-group">
-                <label>カテゴリ（自由入力・Enterで追加）</label>
+                <label>🏷️ カテゴリ（自由入力・Enterで追加）</label>
                 <div className="tag-input-wrapper">
                     {selectedCategories.map((cat, index) => (
                         <span key={index} className="tag">
@@ -205,7 +210,7 @@ const PostArticle: React.FC = () => {
             </div>
 
             <div className="form-group">
-                <label>本文</label>
+                <label>✍️ 本文</label>
                 <ReactMde
                     value={content}
                     onChange={setContent}
@@ -217,7 +222,7 @@ const PostArticle: React.FC = () => {
                 />
             </div>
 
-            <div>
+            <div className="media-upload-section">
                 <input
                     type="file"
                     ref={fileInputRef}
@@ -226,31 +231,52 @@ const PostArticle: React.FC = () => {
                     accept="image/*,video/*"
                     onChange={(e) => handleFileUpload(e.target.files)}
                 />
-                <button onClick={handleFileUploadClick} disabled={uploading}>
-                    {uploading ? "アップロード中..." : "画像・動画を追加"}
+                <button className="upload-button" onClick={handleFileUploadClick} disabled={uploading}>
+                    {uploading ? "📤 アップロード中..." : "📷 画像・動画を追加"}
+                </button>
+                <p style={{ marginTop: '8px', color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+                    JPEG, PNG, MP4, MOV形式をサポート
+                </p>
+            </div>
+
+            {uploading && (
+                <div className="upload-status">
+                    <p>📤 アップロード中...</p>
+                </div>
+            )}
+
+            {mediaFiles.length > 0 && (
+                <div className="media-preview">
+                    {mediaFiles.map(({ file, url, type }, index) => (
+                        <div key={index} className="media-item">
+                            {type.startsWith("image/") && (
+                                <img 
+                                    src={url.startsWith("http") ? url : `${API_URL}${url}`} 
+                                    alt={file.name} 
+                                    style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} 
+                                />
+                            )}
+                            {type.startsWith("video/") && (
+                                <video 
+                                    src={url.startsWith("http") ? url : `${API_URL}${url}`} 
+                                    controls 
+                                    style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} 
+                                />
+                            )}
+                            <span>{file.name}</span>
+                            <button onClick={() => handleInsertMedia(url, type)}>
+                                📝 本文に挿入
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="submit-section">
+                <button className="submit-button" onClick={handleSubmit} disabled={uploading}>
+                    {uploading ? "📤 投稿中..." : "🚀 記事を投稿する"}
                 </button>
             </div>
-
-            {uploading && <p style={{ color: "red" }}>アップロード中...</p>}
-
-            <div className="media-preview">
-                {mediaFiles.map(({ file, url, type }, index) => (
-                    <div key={index} className="media-item">
-                        {type.startsWith("image/") && (
-                            <img src={url.startsWith("http") ? url : `${API_URL}${url}`} alt={file.name} style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
-                        )}
-                        {type.startsWith("video/") && (
-                            <video src={url.startsWith("http") ? url : `${API_URL}${url}`} controls style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
-                        )}
-                        <span style={{ fontSize: "12px", marginTop: "5px" }}>{file.name}</span>
-                        <button onClick={() => handleInsertMedia(url, type)} style={{ fontSize: "12px" }}>
-                            本文に挿入
-                        </button>
-                    </div>
-                ))}
-            </div>
-
-            <button onClick={handleSubmit}>記事を投稿する</button>
         </div>
     );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import DOMPurify from "dompurify";
 import Showdown from "showdown";
@@ -47,9 +47,10 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
     onCommentPosted,
     onAuthRequired
 }) => {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    const API_BASE_URL = "http://localhost:8000";
     const [comment, setComment] = useState<string>("");
     const [error, setError] = useState<string>("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const { isAuthenticated, user } = useAuth();
 
     const handleCommentSubmit = async (e: React.FormEvent) => {
@@ -60,38 +61,107 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
             return;
         }
         
-        if (!comment) {
+        if (!comment.trim()) {
             setError("コメントを入力してください");
+            return;
+        }
+
+        if (comment.length > 500) {
+            setError("コメントは500文字以内で入力してください");
             return;
         }
     
         try {
+            setIsSubmitting(true);
+            setError("");
+            
             const response = await axios.post(`${API_BASE_URL}/articles/${articleId}/comments`, {
                 user_id: user.id,
-                comment,
+                comment: comment.trim(),
             });
+            
             console.log("コメント投稿成功:", response.data);
             setComment("");
-            setError("");
             onCommentPosted(); // 投稿後に親コンポーネントのリロード
         } catch (err) {
             console.error("コメント投稿失敗:", err);
             setError("コメントの投稿に失敗しました");
+        } finally {
+            setIsSubmitting(false);
         }
     };    
 
     return (
-        <form onSubmit={handleCommentSubmit} className="comment-form">
-            <div>
-                <h3>コメントを投稿する</h3>
-                <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                ></textarea>
+        <div className="comment-form-container">
+            <div className="comment-form-header">
+                <h3 className="comment-form-title">💬 コメントを投稿する</h3>
+                <p className="comment-form-subtitle">
+                    {isAuthenticated ? 
+                        `${user?.username || 'あなた'}としてコメントを投稿` : 
+                        'ログインしてコメントを投稿しましょう'
+                    }
+                </p>
             </div>
-            <button type="submit">投稿する</button>
-            {error && <p className="error-message">{error}</p>}
-        </form>
+            
+            <form onSubmit={handleCommentSubmit} className="comment-form">
+                <div className="comment-input-container">
+                    <textarea
+                        className="comment-textarea"
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        placeholder="この記事についてのあなたの感想や意見をお聞かせください..."
+                        rows={4}
+                        maxLength={500}
+                        disabled={!isAuthenticated || isSubmitting}
+                    />
+                    <div className="comment-input-footer">
+                        <span className="character-count">
+                            {comment.length}/500
+                        </span>
+                        {!isAuthenticated && (
+                            <span className="login-hint">
+                                ログインが必要です
+                            </span>
+                        )}
+                    </div>
+                </div>
+                
+                {error && (
+                    <div className="comment-error">
+                        <span className="error-icon">⚠️</span>
+                        {error}
+                    </div>
+                )}
+                
+                <div className="comment-form-actions">
+                    <button 
+                        type="button" 
+                        className="comment-cancel-button"
+                        onClick={() => setComment("")}
+                        disabled={!comment || isSubmitting}
+                    >
+                        クリア
+                    </button>
+                    <button 
+                        type="submit" 
+                        className="comment-submit-button"
+                        disabled={!isAuthenticated || !comment.trim() || isSubmitting}
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <span className="loading-spinner"></span>
+                                投稿中...
+                            </>
+                        ) : (
+                            <>
+                                <span className="submit-icon">🚀</span>
+                                コメント投稿
+                            </>
+                        )}
+                    </button>
+                </div>
+            </form>
+        </div>
     );
 };
 
@@ -105,7 +175,7 @@ const ArticleDetail: React.FC = () => {
     const { isAuthenticated, user } = useAuth();
     const [showAuthModal, setShowAuthModal] = useState(false);
     const navigate = useNavigate();
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    const API_BASE_URL = "http://localhost:8000";
 
     const converter = new Showdown.Converter({
         tables: true,
@@ -126,6 +196,9 @@ const ArticleDetail: React.FC = () => {
         smartIndentationFix: true,
     });
     
+    const truncateText = (text: string, maxLength: number) => {
+        return text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
+    };
     
     converter.addExtension({
         type: "output",
@@ -197,19 +270,72 @@ const ArticleDetail: React.FC = () => {
             return;
         }
         try {
-            const likeButton = document.querySelector(".like-button");
-            likeButton?.classList.add("like-animation");
-            setTimeout(() => likeButton?.classList.remove("like-animation"), 300);
+            // いいねボタンに特別なアニメーション効果を追加
+            const likeButton = document.querySelector(".like-button") as HTMLElement;
+            if (likeButton) {
+                // 連続クリック防止
+                likeButton.style.pointerEvents = "none";
+                
+                // 特別感のあるアニメーション
+                likeButton.classList.add("liked");
+                
+                // ハートエフェクトを作成
+                createHeartEffect(likeButton);
+                
+                // 振動効果（対応ブラウザのみ）
+                if (navigator.vibrate) {
+                    navigator.vibrate([100, 50, 100]);
+                }
+                
+                setTimeout(() => {
+                    likeButton.classList.remove("liked");
+                    likeButton.style.pointerEvents = "auto";
+                }, 800);
+            }
 
             const response = await axios.post(`${API_BASE_URL}/articles/${article?.id}/like`);
             if (article) {
                 setArticle({ ...article, like_count: response.data.like_count });
             }
 
-            setPopupMessage("いいねしました！");
+            setPopupMessage("❤️ いいねしました！");
             setTimeout(() => setPopupMessage(null), 3000);
         } catch (error) {
             console.error("いいねに失敗しました:", error);
+        }
+    };
+
+    // ハートエフェクトを作成する関数
+    const createHeartEffect = (button: HTMLElement) => {
+        const hearts = ['❤️', '💖', '💕', '💗', '💝'];
+        const heartCount = 5;
+        
+        for (let i = 0; i < heartCount; i++) {
+            const heart = document.createElement('div');
+            heart.textContent = hearts[Math.floor(Math.random() * hearts.length)];
+            heart.style.cssText = `
+                position: absolute;
+                font-size: 1.5rem;
+                pointer-events: none;
+                z-index: 1000;
+                animation: heartFloat 2s ease-out forwards;
+                left: ${button.offsetLeft + Math.random() * button.offsetWidth}px;
+                top: ${button.offsetTop}px;
+            `;
+            
+            // ランダムな方向に飛ばす
+            const randomX = (Math.random() - 0.5) * 200;
+            const randomY = -100 - Math.random() * 100;
+            
+            heart.style.setProperty('--random-x', `${randomX}px`);
+            heart.style.setProperty('--random-y', `${randomY}px`);
+            
+            button.parentElement?.appendChild(heart);
+            
+            // アニメーション終了後に要素を削除
+            setTimeout(() => {
+                heart.remove();
+            }, 2000);
         }
     };
 
@@ -284,9 +410,8 @@ const ArticleDetail: React.FC = () => {
                 <button
                     onClick={() => navigate(`/edit-article/${article.id}`)}
                     className="edit-button"
-                    style={{ marginTop: "1rem", padding: "0.5rem 1rem", borderRadius: "5px" }}
                 >
-                    編集
+                    ✏️ 編集
                 </button>
             )}
             <div className="article-content">
@@ -363,10 +488,70 @@ const ArticleDetail: React.FC = () => {
 
             <div className="recommendation-news">
                 {article.user_articles && article.user_articles.length > 0 && (
-                    <Articles articles={article.user_articles} title="このユーザーの他の記事" />
+                    <div className="user-articles-section">
+                        <h3>このユーザーの他の記事</h3>
+                        <div className="articles-list">
+                            {article.user_articles.slice(0, 3).map((userArticle, index) => (
+                                <div key={index} className="article-card" onClick={() => navigate(`/articles/${userArticle.id}`)}>
+                                <div className="card-thumbnail">
+                                    {userArticle.thumbnail_url ? (
+                                        <img
+                                            src={userArticle.thumbnail_url}
+                                            alt={userArticle.title}
+                                            className="thumbnail-image"
+                                        />
+                                    ) : (
+                                        <div className="placeholder-thumbnail" />
+                                    )}
+                                </div>
+                                <div className="card-content">
+                                    <h2 className="article-title">
+                                        {truncateText(userArticle.title, 25)}
+                                    </h2>
+                                    <div className="article-meta">
+                                        <p>❤️ {userArticle.like_count}</p>
+                                        <p>💬 {userArticle.comment_count}</p>
+                                        <p>📅 {formatDate(userArticle.public_at)}</p>
+                                        <p>👁️‍🗨️ {userArticle.access_count}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            ))}
+                        </div>
+                    </div>
                 )}
                 {article.recommended_articles && article.recommended_articles.length > 0 && (
-                    <Articles articles={article.recommended_articles} title="おすすめの記事" />
+                    <div className="recommended-articles-section">
+                        <h3>おすすめの記事</h3>
+                        <div className="articles-list">
+                            {article.recommended_articles.slice(0, 3).map((recArticle, index) => (
+                                <div key={index} className="article-card" onClick={() => navigate(`/articles/${recArticle.id}`)}>
+                                    <div className="card-thumbnail">
+                                        {recArticle.thumbnail_url ? (
+                                            <img
+                                                src={recArticle.thumbnail_url}
+                                                alt={recArticle.title}
+                                                className="thumbnail-image"
+                                            />
+                                        ) : (
+                                            <div className="placeholder-thumbnail" />
+                                        )}
+                                    </div>
+                                    <div className="card-content">
+                                        <h2 className="article-title">
+                                            {truncateText(recArticle.title, 25)}
+                                        </h2>
+                                        <div className="article-meta">
+                                            <p>❤️ {recArticle.like_count}</p>
+                                            <p>💬 {recArticle.comment_count}</p>
+                                            <p>📅 {formatDate(recArticle.public_at)}</p>
+                                            <p>👁️‍🗨️ {recArticle.access_count}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 )}
             </div>
 
