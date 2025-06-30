@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import DOMPurify from "dompurify";
 import Showdown from "showdown";
-import Articles from "./Articles"; 
+ 
 import { useAuth } from "../contexts/authContext";
 import AuthModal from "../components/AuthModal";
 import XLogo from "../assets/x-logo-black.png";

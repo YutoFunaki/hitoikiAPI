@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MdAccountCircle } from "react-icons/md";
-import { FaCrown, FaHome, FaTimes, FaNewspaper } from "react-icons/fa";
-import { FaArrowTrendUp } from "react-icons/fa6";
+import { FaHome, FaTimes, FaNewspaper } from "react-icons/fa";
 import { useAuth } from "../contexts/authContext";
 
 interface SideMenuProps {

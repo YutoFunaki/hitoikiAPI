@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthModal from "../components/AuthModal"; 
 import { useAuth } from "../contexts/authContext";
-import { FaSearch, FaChevronLeft, FaChevronRight, FaHeart, FaTimes } from "react-icons/fa";
+import { FaSearch, FaChevronLeft, FaChevronRight, FaTimes } from "react-icons/fa";
 
 const RightSidebar: React.FC<{ onSearch: (query: string) => void }> = ({ onSearch }) => {
     const [searchQuery, setSearchQuery] = useState("");

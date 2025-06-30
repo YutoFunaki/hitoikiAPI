@@ -9,6 +9,7 @@ interface Article {
     comment_count: number;
     access_count: number;
     public_at?: string;
+    created_at?: string;
     category?: string[];
 }
 
@@ -17,7 +18,8 @@ interface ArticleCardProps {
 }
 
 const ArticleCard: React.FC<ArticleCardProps> = ({ article }) => {
-    const formatDate = (date: string) => {
+    const formatDate = (date?: string) => {
+        if (!date) return '';
         const d = new Date(date);
         return `${d.getMonth() + 1}/${d.getDate()}(${["日", "月", "火", "水", "木", "金", "土"][d.getDay()]}) ${d
             .getHours()
@@ -50,7 +52,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article }) => {
                     <div className="article-meta">
                         <p>❤️ {article.like_count}</p>
                         <p>💬 {article.comment_count}</p>
-                        <p>📅 {formatDate(article.public_at)}</p>
+                        <p>📅 {formatDate(article.public_at || article.created_at)}</p>
                         <p>👁️‍🗨️ {article.access_count}</p>
                     </div>
                 </div>
