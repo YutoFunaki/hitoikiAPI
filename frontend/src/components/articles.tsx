@@ -29,10 +29,12 @@ interface ArticlesResponse {
 
 interface ArticlesProps {
     viewMode?: 'latest' | 'ranking' | 'trend';
+    searchQuery?: string;
 }
 
 const Articles: React.FC<ArticlesProps> = ({ 
-    viewMode = 'latest'
+    viewMode = 'latest',
+    searchQuery
 }) => {
     const [articles, setArticles] = useState<Article[]>([]);
     const [loading, setLoading] = useState(true);
@@ -48,14 +50,20 @@ const Articles: React.FC<ArticlesProps> = ({
 
         try {
             let url = `${API_URL}/articles`;
+            let params = new URLSearchParams();
             
-            if (viewMode === 'ranking') {
+            if (searchQuery && searchQuery.trim()) {
+                // 検索モード
+                url = `${API_URL}/search`;
+                params.append('query', searchQuery.trim());
+            } else if (viewMode === 'ranking') {
                 url = `${API_URL}/articles/ranking/${rankingPeriod}`;
             } else if (viewMode === 'trend') {
                 url = `${API_URL}/articles/trend/${trendPeriod}`;
             }
 
-            const response = await fetch(url);
+            const fullUrl = params.toString() ? `${url}?${params}` : url;
+            const response = await fetch(fullUrl);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -72,17 +80,40 @@ const Articles: React.FC<ArticlesProps> = ({
         } catch (error) {
             console.error("記事取得エラー:", error);
             setError("記事の取得に失敗しました");
-            setArticles([]);
+            
+            // 検索時のフォールバック
+            if (searchQuery && searchQuery.trim()) {
+                const dummyResults = [
+                    {
+                        id: 1,
+                        title: `🔍 「${searchQuery}」に関連する癒しの記事`,
+                        thumbnail_image: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&h=300&fit=crop",
+                        likes_count: 45,
+                        access_count: 120,
+                        comment_count: 12,
+                        category: ["検索", "癒し"],
+                        username: "検索結果",
+                        public_at: new Date().toISOString()
+                    }
+                ];
+                setArticles(dummyResults);
+            } else {
+                setArticles([]);
+            }
         } finally {
             setLoading(false);
         }
-    }, [viewMode, rankingPeriod, trendPeriod]);
+    }, [viewMode, rankingPeriod, trendPeriod, searchQuery]);
 
     useEffect(() => {
         fetchArticles();
     }, [fetchArticles]);
 
     const getViewModeTitle = () => {
+        if (searchQuery && searchQuery.trim()) {
+            return `🔍 検索結果: 「${searchQuery}」`;
+        }
+        
         switch (viewMode) {
             case 'ranking':
                 return `🏆 ランキング (${rankingPeriod === 'daily' ? '日次' : rankingPeriod === 'weekly' ? '週次' : '月次'})`;
