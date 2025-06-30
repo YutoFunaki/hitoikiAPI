@@ -4,11 +4,11 @@ import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBxbeYImDYJ9lHIWfL-P1dh_c5budaIEB4",
-  authDomain: "calmie.jp",
-  projectId: "hitoiki-app",
+  authDomain: "hitoiki-app.firebaseapp.com",
+  projectId: "hitoiki-app", // バックエンドと一致
   storageBucket: "hitoiki-app.appspot.com",
   messagingSenderId: "670782940710",
-  appId: "calmie",
+  appId: "1:670782940710:web:calmie",
 };
 
 const app = initializeApp(firebaseConfig); // ✅ ここで初期化
