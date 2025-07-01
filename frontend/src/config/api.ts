@@ -22,7 +22,7 @@ const getApiBaseUrl = (): string => {
     // 本番環境では、APIエンドポイントを指定
     // calmie.jp の場合は、直接バックエンドにアクセス
     if (currentOrigin.includes('calmie.jp')) {
-      return currentOrigin;
+      return currentOrigin + "/api";
     }
     
     // その他の本番環境では /api パスを使用
