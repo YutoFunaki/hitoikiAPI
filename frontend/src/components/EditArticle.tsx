@@ -4,11 +4,11 @@ import ReactMde from "react-mde";
 import Showdown from "showdown";
 import "react-mde/lib/styles/css/react-mde-all.css";
 import axios from "axios";
+import { API_BASE_URL } from '../config/api';
 
 const EditArticle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const API_URL = "http://localhost:8000";
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
@@ -20,14 +20,14 @@ const EditArticle: React.FC = () => {
   useEffect(() => {
     const fetchArticle = async () => {
       try {
-        const res = await axios.get(`${API_URL}/edit-article/${id}`);
+        const res = await axios.get(`${API_BASE_URL}/edit-article/${id}`);
         setTitle(res.data.title);
         setContent(res.data.content);
         setSelectedCategories(res.data.categories.map((catId: string) => Number(catId)));
         if (res.data.content_image) {
           const media = res.data.content_image.map((url: string) => ({
             file: new File([""], url.split("/").pop() || "media", { type: "image/jpeg" }),
-            url: url.startsWith("http") ? url : `${API_URL}${url}`,
+            url: url.startsWith("http") ? url : `${API_BASE_URL}${url}`,
             type: "image/jpeg",
           }));
           setMediaFiles(media);
@@ -57,7 +57,7 @@ const EditArticle: React.FC = () => {
       formData.append("update_user_id", userId.toString());
       mediaFiles.forEach(({ file }) => formData.append("files", file));
 
-      const res = await fetch(`${API_URL}/edit-article/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/edit-article/${id}`, {
         method: "post",
         body: formData,
       });
@@ -88,7 +88,7 @@ const EditArticle: React.FC = () => {
       formData.append("file", file);
 
       try {
-        const res = await fetch(`${API_URL}/upload-media/`, {
+        const res = await fetch(`${API_BASE_URL}/upload-media/`, {
           method: "POST",
           body: formData,
         });
@@ -96,7 +96,7 @@ const EditArticle: React.FC = () => {
         if (!res.ok) throw new Error("アップロード失敗");
 
         const data = await res.json();
-        const fullUrl = data.url.startsWith("http") ? data.url : `${API_URL}${data.url}`;
+        const fullUrl = data.url.startsWith("http") ? data.url : `${API_BASE_URL}${data.url}`;
         uploadedFiles.push({ file, url: fullUrl, type: file.type });
       } catch (error) {
         console.error("アップロードエラー:", error);
@@ -107,7 +107,7 @@ const EditArticle: React.FC = () => {
   };
 
   const handleInsertMedia = (url: string, type: string) => {
-    const fullUrl = url.startsWith("http") ? url : `${API_URL}${url}`;
+    const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
 
     if (fullUrl.startsWith("blob:")) {
       alert("アップロード完了をお待ちください");
@@ -212,10 +212,10 @@ const EditArticle: React.FC = () => {
         {mediaFiles.map(({ file, url, type }, index) => (
           <div key={index} className="media-item">
             {type.startsWith("image/") && (
-              <img src={url.startsWith("http") ? url : `${API_URL}${url}`} alt={file.name} style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
+              <img src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} alt={file.name} style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
             )}
             {type.startsWith("video/") && (
-              <video src={url.startsWith("http") ? url : `${API_URL}${url}`} controls style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
+              <video src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} controls style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
             )}
             <span style={{ fontSize: "12px", marginTop: "5px" }}>{file.name}</span>
             <button onClick={() => handleInsertMedia(url, type)} style={{ fontSize: "12px" }}>

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import DOMPurify from "dompurify";
 import Showdown from "showdown";
+import { API_BASE_URL } from '../config/api';
  
 import { useAuth } from "../contexts/authContext";
 import AuthModal from "../components/AuthModal";
@@ -47,7 +48,6 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
     onCommentPosted,
     onAuthRequired
 }) => {
-    const API_BASE_URL = "http://localhost:8000";
     const [comment, setComment] = useState<string>("");
     const [error, setError] = useState<string>("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -175,7 +175,6 @@ const ArticleDetail: React.FC = () => {
     const { isAuthenticated, user } = useAuth();
     const [showAuthModal, setShowAuthModal] = useState(false);
     const navigate = useNavigate();
-    const API_BASE_URL = "http://localhost:8000";
 
     const converter = new Showdown.Converter({
         tables: true,

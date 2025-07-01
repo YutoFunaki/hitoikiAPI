@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { API_BASE_URL } from '../config/api';
 
 interface Article {
     id: number;
@@ -42,24 +43,24 @@ const Articles: React.FC<ArticlesProps> = ({
     const [rankingPeriod, setRankingPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [trendPeriod] = useState<'hourly'>('hourly');
 
-    const API_URL = "http://localhost:8000";
+
 
     const fetchArticles = useCallback(async () => {
         setLoading(true);
         setError(null);
 
         try {
-            let url = `${API_URL}/articles`;
+            let url = `${API_BASE_URL}/articles`;
             let params = new URLSearchParams();
             
             if (searchQuery && searchQuery.trim()) {
                 // 検索モード
-                url = `${API_URL}/search`;
+                url = `${API_BASE_URL}/search`;
                 params.append('query', searchQuery.trim());
             } else if (viewMode === 'ranking') {
-                url = `${API_URL}/articles/ranking/${rankingPeriod}`;
+                url = `${API_BASE_URL}/articles/ranking/${rankingPeriod}`;
             } else if (viewMode === 'trend') {
-                url = `${API_URL}/articles/trend/${trendPeriod}`;
+                url = `${API_BASE_URL}/articles/trend/${trendPeriod}`;
             }
 
             const fullUrl = params.toString() ? `${url}?${params}` : url;

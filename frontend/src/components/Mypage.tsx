@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import ArticleCard from "./ArticleCard"; // adjust path as necessary
 import { useAuth } from "../contexts/authContext";
+import { API_BASE_URL } from '../config/api';
 
 interface Article {
   id: number;
@@ -22,7 +23,6 @@ const MyPage: React.FC = () => {
   const [editedIntro, setEditedIntro] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
-  const API_BASE_URL = "http://localhost:8000";
 
   useEffect(() => {
     if (!user?.id) return;

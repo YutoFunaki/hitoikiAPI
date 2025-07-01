@@ -1,13 +1,13 @@
 import axios from "axios";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from '../config/api';
 
 const Login: React.FC = () => {
     const [email, setEmail] = useState<string>("");
     const [password, setPassword] = useState<string>("");
     const [error, setError] = useState<string>("");
     const navigate = useNavigate();
-    const API_BASE_URL = "http://localhost:8000";
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { PREFECTURES } from "../config/prefectures";
+import { API_BASE_URL } from '../config/api';
 
 const Register: React.FC = () => {
     const [email, setEmail] = useState<string>("");
@@ -9,7 +10,6 @@ const Register: React.FC = () => {
     const [prefectures, setPrefectures] = useState<number | "">("");
     const [error, setError] = useState<string>("");
     const [success, setSuccess] = useState<string>("");
-    const API_BASE_URL = "http://localhost:8000";
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();

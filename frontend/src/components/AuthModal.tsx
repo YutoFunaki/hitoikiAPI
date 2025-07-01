@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/authContext";
 import axios from "axios";
 import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
 import { auth } from "../firebase";
+import { API_BASE_URL } from '../config/api';
 
 const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { login } = useAuth();
@@ -11,7 +12,6 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
-  const API_BASE_URL = "http://localhost:8000";
 
   // リダイレクト認証の結果をチェック
   useEffect(() => {

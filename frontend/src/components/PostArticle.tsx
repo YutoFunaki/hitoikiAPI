@@ -3,6 +3,7 @@ import ReactMde from "react-mde";
 import Showdown from "showdown";
 import "react-mde/lib/styles/css/react-mde-all.css";
 import { useAuth } from "../contexts/authContext";
+import { API_BASE_URL } from '../config/api';
 
 const PostArticle: React.FC = () => {
     const [title, setTitle] = useState("");
@@ -15,7 +16,7 @@ const PostArticle: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { user, isAuthenticated } = useAuth();
     const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-    const API_URL = "http://localhost:8000";
+
 
     const handleFileUploadClick = () => {
         fileInputRef.current?.click();
@@ -52,7 +53,7 @@ const PostArticle: React.FC = () => {
             formData.append("file", file);
 
             try {
-                const response = await fetch(`${API_URL}/upload-media/`, {
+                const response = await fetch(`${API_BASE_URL}/upload-media/`, {
                     method: "POST",
                     body: formData,
                 });
@@ -60,7 +61,7 @@ const PostArticle: React.FC = () => {
                 if (!response.ok) throw new Error("アップロードに失敗しました");
 
                 const data = await response.json();
-                const fullUrl = data.url.startsWith("http") ? data.url : `${API_URL}${data.url}`;
+                const fullUrl = data.url.startsWith("http") ? data.url : `${API_BASE_URL}${data.url}`;
                 uploadedFiles.push({ file, url: fullUrl, type: file.type });
 
             } catch (error) {
@@ -73,7 +74,7 @@ const PostArticle: React.FC = () => {
     };
 
     const handleInsertMedia = (url: string, type: string) => {
-        const fullUrl = url.startsWith("http") ? url : `${API_URL}${url}`;
+        const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
 
         if (fullUrl.startsWith("blob:")) {
             alert("アップロードが完了するまで少々お待ちください・・・");
@@ -111,7 +112,7 @@ const PostArticle: React.FC = () => {
             formData.append("public_status", "public");
             mediaFiles.forEach(({ file }) => formData.append("files", file));
 
-            const response = await fetch(`${API_URL}/post-article`, {
+            const response = await fetch(`${API_BASE_URL}/post-article`, {
                 method: "POST",
                 body: formData,
             });
@@ -251,14 +252,14 @@ const PostArticle: React.FC = () => {
                         <div key={index} className="media-item">
                             {type.startsWith("image/") && (
                                 <img 
-                                    src={url.startsWith("http") ? url : `${API_URL}${url}`} 
+                                    src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} 
                                     alt={file.name} 
                                     style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} 
                                 />
                             )}
                             {type.startsWith("video/") && (
                                 <video 
-                                    src={url.startsWith("http") ? url : `${API_URL}${url}`} 
+                                    src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} 
                                     controls 
                                     style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} 
                                 />
