@@ -43,6 +43,7 @@ const Index: React.FC = () => {
                         <Route path="/edit-article/:articleId" element={<EditArticle />} />
                         <Route path="/category/:categoryName" element={<Articles viewMode={viewMode} searchQuery={searchQuery} />} />
                         <Route path="/mypage/:userId" element={<MyPage />} />
+                        <Route path="/mypage" element={<MyPage />} />
                     </Routes>
                 </div>
                 <RightSidebar onSearch={handleSearch} />

@@ -37,6 +37,8 @@ interface MyPageData {
 }
 
 const MyPage: React.FC = () => {
+  console.log("🚀 MyPage コンポーネントがマウントされました！");
+  
   const { user, login, isAuthenticated } = useAuth();
   const [data, setData] = useState<MyPageData | null>(null);
   const [editing, setEditing] = useState(false);
@@ -45,14 +47,34 @@ const MyPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'articles' | 'likes' | 'history'>('articles');
+  
+  console.log("📊 初期レンダー時の状態:", { 
+    isAuthenticated, 
+    userId: user?.id, 
+    username: user?.username,
+    loading 
+  });
 
   useEffect(() => {
     console.log("🔍 MyPage useEffect 実行中...");
     console.log("📝 認証状態:", { isAuthenticated, user: user?.id });
     console.log("🌐 API_BASE_URL:", API_BASE_URL);
     
+    // 認証状態が初期化中の場合は待機
+    if (isAuthenticated === undefined) {
+      console.log("⏳ 認証状態初期化中...");
+      return;
+    }
+    
+    if (!isAuthenticated) {
+      console.log("❌ 未認証ユーザー");
+      setLoading(false);
+      return;
+    }
+    
     if (!user?.id) {
       console.log("❌ ユーザーIDが見つかりません");
+      console.log("🔍 ユーザーオブジェクト詳細:", user);
       setLoading(false);
       return;
     }
@@ -124,6 +146,28 @@ const MyPage: React.FC = () => {
     }
   };
 
+  // 認証状態初期化中
+  if (isAuthenticated === undefined) {
+    return (
+      <div className="mypage-loading">
+        <div className="loading-spinner"></div>
+        <p>認証状態を確認中...</p>
+      </div>
+    );
+  }
+
+  // 未認証ユーザー
+  if (!isAuthenticated) {
+    return (
+      <div className="mypage-error">
+        <h2>🔒 ログインが必要です</h2>
+        <p>マイページを表示するにはログインしてください。</p>
+        <button onClick={() => window.location.href = '/login'}>ログインページへ</button>
+      </div>
+    );
+  }
+
+  // データ読み込み中
   if (loading) {
     return (
       <div className="mypage-loading">
@@ -133,6 +177,7 @@ const MyPage: React.FC = () => {
     );
   }
 
+  // データ取得失敗
   if (!data) {
     return (
       <div className="mypage-error">

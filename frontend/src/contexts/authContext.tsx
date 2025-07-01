@@ -8,7 +8,7 @@ interface User {
 }
 
 interface AuthContextType {
-  isAuthenticated: boolean;
+  isAuthenticated: boolean | undefined;
   user: User | null;
   login: (token: string, user: User) => void;
   logout: () => void;
@@ -17,16 +17,35 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | undefined>(undefined);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    console.log("🔑 AuthContext 初期化開始...");
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
+    console.log("🔍 ローカルストレージ確認:", { 
+      hasToken: !!token, 
+      hasUser: !!storedUser 
+    });
+    
     if (token && storedUser) {
-      setIsAuthenticated(true);
-      setUser(JSON.parse(storedUser));
+      try {
+        const userData = JSON.parse(storedUser);
+        console.log("✅ ユーザー情報復元:", userData);
+        setIsAuthenticated(true);
+        setUser(userData);
+      } catch (error) {
+        console.error("❌ ユーザー情報パースエラー:", error);
+        setIsAuthenticated(false);
+        setUser(null);
+      }
+    } else {
+      console.log("❌ 認証情報なし");
+      setIsAuthenticated(false);
+      setUser(null);
     }
+    console.log("🏁 AuthContext 初期化完了");
   }, []);
 
   const login = (token: string, userData: User) => {
