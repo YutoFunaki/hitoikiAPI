@@ -81,6 +81,18 @@ MAX_FILE_SIZE_MB = 100  # 100MBまで許可（大きめに）
 MAX_IMAGE_WIDTH = 1280  # 画像の最大幅を制限
 ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "mp4", "mov", "avi", "webm"]  # .mov を許可
 
+# ベースURL設定（環境に応じて動的に決定）
+def get_base_url():
+    # 環境変数から取得（本番環境での優先度が高い）
+    base_url = os.getenv("API_BASE_URL")
+    if base_url:
+        return base_url
+    
+    # 本番環境の場合（calmie.jp）
+    # DockerやServerコンテキストでは通常localhost:8000だが、
+    # 外部からはhttps://calmie.jp/apiでアクセスされる
+    return "https://calmie.jp/api"
+
 # ディレクトリが存在しない場合は作成
 if not os.path.exists(UPLOAD_DIRECTORY):
     os.makedirs(UPLOAD_DIRECTORY)
@@ -609,7 +621,7 @@ async def upload_media(file: UploadFile = File(...)):
                 content = await file.read()
                 await out_file.write(content)
 
-        file_url = f"http://localhost:8000/static/{new_filename}"
+        file_url = f"{get_base_url()}/static/{new_filename}"
         return {"filename": new_filename, "url": file_url}
 
     except HTTPException as http_err:
@@ -643,7 +655,7 @@ async def post_article(
             async with aiofiles.open(thumb_path, "wb") as f:
                 await f.write(thumbnail_content)
 
-            thumbnail_url = f"http://localhost:8000/static/{unique_name}"
+            thumbnail_url = f"{get_base_url()}/static/{unique_name}"
         else:
             thumbnail_url = None
 
@@ -685,7 +697,7 @@ async def post_article(
                 content = await file.read()
                 await buffer.write(content)
 
-            file_urls.append(f"http://localhost:8000/static/{unique_filename}")
+            file_urls.append(f"{get_base_url()}/static/{unique_filename}")
 
         return {
             "message": "記事が投稿されました",
@@ -944,7 +956,7 @@ async def edit_user(
             await out_file.write(content)
 
         # URLに設定
-        user.user_icon = f"http://localhost:8000/static/{filename}"
+        user.user_icon = f"{get_base_url()}/static/{filename}"
         print(f"✅ 保存完了: user_icon = {user.user_icon}")
     else:
         print("🕳 ユーザーアイコンは未変更")
