@@ -20,9 +20,9 @@ const getApiBaseUrl = (): string => {
     }
     
     // 本番環境では、APIエンドポイントを指定
-    // calmie.jp の場合は、ポート8000でバックエンドが動作していると仮定
+    // calmie.jp の場合は、nginxのリバースプロキシ経由で /api パスを使用
     if (currentOrigin.includes('calmie.jp')) {
-      return 'http://calmie.jp:8000';
+      return `${currentOrigin}/api`;
     }
     
     // その他の本番環境では /api パスを使用
