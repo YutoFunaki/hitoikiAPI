@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/authContext";
 import axios from "axios";
-import { GoogleAuthProvider, signInWithPopup} from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
 import { auth } from "../firebase";
 
 const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
@@ -12,6 +12,30 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const API_BASE_URL = "http://localhost:8000";
+
+  // リダイレクト認証の結果をチェック
+  useEffect(() => {
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const idToken = await result.user.getIdToken();
+          const res = await axios.post(`${API_BASE_URL}/oauth-login`, {
+            id_token: idToken,
+          });
+          login(res.data.token, res.data.user);
+          onClose();
+        }
+      } catch (err) {
+        console.error("リダイレクト認証エラー:", err);
+        setError("認証に失敗しました");
+      }
+    };
+
+    if (isOpen) {
+      checkRedirectResult();
+    }
+  }, [isOpen, login, onClose]);
 
   if (!isOpen) return null;
 
@@ -47,8 +71,15 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
   const handleGoogleLogin = async () => {
     try {
       const provider = new GoogleAuthProvider();
+      // CORS問題を回避するため、カスタムパラメータを追加
+      provider.setCustomParameters({
+        'prompt': 'select_account'
+      });
+      
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
+
+      console.log("Firebase認証成功、IDトークン取得:", idToken);
 
       const res = await axios.post(`${API_BASE_URL}/oauth-login`, {
         id_token: idToken,
@@ -56,9 +87,24 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
 
       login(res.data.token, res.data.user);
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Googleログイン失敗:", err);
-      setError("Googleログインに失敗しました");
+      if (err.code === 'auth/popup-blocked') {
+        // ポップアップがブロックされた場合はリダイレクト方式にフォールバック
+        try {
+          const provider = new GoogleAuthProvider();
+          provider.setCustomParameters({
+            'prompt': 'select_account'
+          });
+          await signInWithRedirect(auth, provider);
+        } catch (redirectErr) {
+          setError("認証に失敗しました。ブラウザの設定を確認してください。");
+        }
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setError("ログインがキャンセルされました。");
+      } else {
+        setError(`Googleログインに失敗しました: ${err.message}`);
+      }
     }
   };
 
