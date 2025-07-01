@@ -24,6 +24,9 @@ from datetime import datetime, timedelta
 import aiofiles
 import json
 import shutil
+from PIL import Image, ImageOps
+from io import BytesIO
+import urllib.parse
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # JWT 設定
@@ -88,9 +91,7 @@ def get_base_url():
     if base_url:
         return base_url
     
-    # 本番環境の場合（calmie.jp）
-    # DockerやServerコンテキストでは通常localhost:8000だが、
-    # 外部からはhttps://calmie.jp/apiでアクセスされる
+    # 本番環境デフォルト
     return "https://calmie.jp/api"
 
 # ディレクトリが存在しない場合は作成
@@ -306,13 +307,13 @@ def read_root(db: Session = Depends(get_db)):
     
     return result
 
-# 記事一覧(最新)を取得 - /articlesエンドポイント（フロントエンド用）
+# 記事一覧(最新)を取得 - /articlesエンドポイント（修正版）
 @app.get("/articles")
 def get_articles(db: Session = Depends(get_db)):
     # articles テーブルから最新 30 件を取得
     articles = db.query(Article).order_by(Article.public_at.desc()).limit(30).all()
     
-    # 結果リストを構築
+    # 結果リストを構築（既存記事の修正対応）
     result = []
     for article in articles:
         # history_rating から like_count と access_count を取得
@@ -322,6 +323,18 @@ def get_articles(db: Session = Depends(get_db)):
             .first()
         )
         
+        # 🔧 history_ratingが存在しない場合は作成
+        if not history:
+            history = HistoryRating(
+                article_id=article.id,
+                like_count=0,
+                access_count=0,
+                super_like_count=0
+            )
+            db.add(history)
+            db.commit()
+            db.refresh(history)
+        
         # article_comments からコメント数を取得
         comment_count = (
             db.query(ArticleComment)
@@ -329,16 +342,23 @@ def get_articles(db: Session = Depends(get_db)):
             .count()
         )
         
+        # ユーザー情報も含める
+        user = db.query(User).filter(User.id == article.create_user_id).first()
+        
         result.append({
             "id": article.id,
             "title": article.title,
             "content": article.content,
             "thumbnail_url": article.thumbnail_image,
+            "thumbnail_image": article.thumbnail_image,  # 両方のフィールド名に対応
             "public_at": article.public_at,
-            "like_count": history.like_count if history else 0,
-            "access_count": history.access_count if history else 0,
+            "like_count": history.like_count,
+            "likes_count": history.like_count,  # 複数の命名に対応
+            "access_count": history.access_count,
             "comment_count": comment_count,
             "category": article.category,
+            "username": user.username if user else "Unknown",
+            "user_id": article.create_user_id,
         })
     
     return result
@@ -599,19 +619,46 @@ async def upload_media(file: UploadFile = File(...)):
         new_filename = f"{uuid.uuid4()}.{extension}"  # UUIDで重複防止
         file_path = os.path.join(UPLOAD_DIRECTORY, new_filename)
 
-        # **画像の場合は圧縮・リサイズ**
+        # **画像の場合は圧縮・リサイズ（高速化）**
         if extension in ["jpg", "jpeg", "png"]:
-            image = Image.open(file.file)
+            # ファイルの先頭に戻す
+            await file.seek(0)
+            image_data = await file.read()
+            image = Image.open(BytesIO(image_data))
+            
+            # 画像の向きを自動修正（EXIF情報対応）
+            image = ImageOps.exif_transpose(image)
+            
+            # RGBモードに変換（PNG透明度対応）
+            if image.mode in ('RGBA', 'P'):
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                image = background
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+            
             width, height = image.size
 
-            # **画像が大きすぎる場合はリサイズ**
-            if width > MAX_IMAGE_WIDTH:
-                new_height = int((MAX_IMAGE_WIDTH / width) * height)
-                image = image.resize((MAX_IMAGE_WIDTH, new_height), Image.ANTIALIAS)
+            # **画像が大きすぎる場合はリサイズ（高速化）**
+            if width > MAX_IMAGE_WIDTH or height > MAX_IMAGE_WIDTH:
+                # より効率的なリサイズ計算
+                if width > height:
+                    new_width = MAX_IMAGE_WIDTH
+                    new_height = int((MAX_IMAGE_WIDTH / width) * height)
+                else:
+                    new_height = MAX_IMAGE_WIDTH
+                    new_width = int((MAX_IMAGE_WIDTH / height) * width)
+                
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-            # **圧縮して保存**
+            # **最適化された圧縮設定**
             buffer = BytesIO()
-            image.save(buffer, format="JPEG", quality=80)  # 80%の品質で圧縮
+            image.save(buffer, 
+                      format="JPEG", 
+                      quality=70,  # 品質を70%に調整（高速化）
+                      optimize=True,  # ファイルサイズ最適化
+                      progressive=True)  # プログレッシブJPEG（読み込み高速化）
+            
             async with aiofiles.open(file_path, "wb") as out_file:
                 await out_file.write(buffer.getvalue())
 
@@ -651,11 +698,55 @@ async def post_article(
             unique_name = f"{uuid.uuid4()}.{ext}"
             thumb_path = os.path.join(UPLOAD_DIRECTORY, unique_name)
 
-            thumbnail_content = await thumbnail.read()  # ✅ 一度だけ読み込む
-            async with aiofiles.open(thumb_path, "wb") as f:
-                await f.write(thumbnail_content)
+            # **サムネイル画像も最適化処理**
+            if ext in ["jpg", "jpeg", "png"]:
+                await thumbnail.seek(0)
+                thumbnail_data = await thumbnail.read()
+                image = Image.open(BytesIO(thumbnail_data))
+                
+                # 画像の向きを自動修正
+                image = ImageOps.exif_transpose(image)
+                
+                # RGBモードに変換
+                if image.mode in ('RGBA', 'P'):
+                    background = Image.new('RGB', image.size, (255, 255, 255))
+                    background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                    image = background
+                elif image.mode != 'RGB':
+                    image = image.convert('RGB')
+                
+                width, height = image.size
+                
+                # サムネイルサイズに最適化（800px制限）
+                if width > 800 or height > 800:
+                    if width > height:
+                        new_width = 800
+                        new_height = int((800 / width) * height)
+                    else:
+                        new_height = 800
+                        new_width = int((800 / height) * width)
+                    
+                    image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                
+                # 高品質圧縮
+                buffer = BytesIO()
+                image.save(buffer, 
+                          format="JPEG", 
+                          quality=75,  # サムネイルは少し高品質
+                          optimize=True,
+                          progressive=True)
+                
+                async with aiofiles.open(thumb_path, "wb") as f:
+                    await f.write(buffer.getvalue())
+            else:
+                # 非画像ファイルはそのまま保存
+                thumbnail_content = await thumbnail.read()
+                async with aiofiles.open(thumb_path, "wb") as f:
+                    await f.write(thumbnail_content)
 
-            thumbnail_url = f"{get_base_url()}/static/{unique_name}"
+            # **ファイル名をURL安全にエンコード（改行対策）**
+            safe_filename = urllib.parse.quote(unique_name, safe='.')
+            thumbnail_url = f"{get_base_url()}/static/{safe_filename}"
         else:
             thumbnail_url = None
 
@@ -875,13 +966,19 @@ def like_comment(comment_id: int, user_id: int, db: Session = Depends(get_db)):
 @app.post("/articles/{article_id}/bookmark")
 
     
-#  マイページ表示　優先度高
+#  マイページ表示（統計情報付き）
 @app.get("/mypage/{user_id}")
 def get_mypage(user_id: int, db: Session = Depends(get_db)):
+    print(f"🔍 マイページリクエスト受信: user_id={user_id}")
+    
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
+        print(f"❌ ユーザーが見つかりません: user_id={user_id}")
         raise HTTPException(status_code=404, detail="User not found")
+    
+    print(f"✅ ユーザー確認: username={user.username}")
 
+    # ユーザーの記事を取得
     articles = (
         db.query(Article)
         .filter(Article.create_user_id == user_id)
@@ -889,7 +986,12 @@ def get_mypage(user_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
+    # 記事データと統計情報を計算
     article_data = []
+    total_likes = 0
+    total_access = 0
+    total_comments = 0
+    
     for article in articles:
         history = (
             db.query(HistoryRating)
@@ -902,25 +1004,52 @@ def get_mypage(user_id: int, db: Session = Depends(get_db)):
             .count()
         )
 
+        like_count = history.like_count if history else 0
+        access_count = history.access_count if history else 0
+        
+        # 統計に加算
+        total_likes += like_count
+        total_access += access_count
+        total_comments += comment_count
+
         article_data.append({
             "id": article.id,
             "title": article.title,
             "thumbnail_url": article.thumbnail_image,
             "public_at": article.public_at,
-            "like_count": history.like_count if history else 0,
-            "access_count": history.access_count if history else 0,
+            "like_count": like_count,
+            "access_count": access_count,
             "comment_count": comment_count,
+            "category": article.category,
         })
 
-    return {
+    # 統計情報
+    stats = {
+        "total_articles": len(articles),
+        "total_likes": total_likes,
+        "total_access": total_access,
+        "total_comments": total_comments,
+        "member_since": user.created_at.strftime("%Y年%m月") if user.created_at else "不明",
+    }
+    
+    print(f"📊 統計情報: {stats}")
+    print(f"📝 記事数: {len(article_data)}")
+
+    response_data = {
         "user": {
             "id": user.id,
             "username": user.username,
             "user_icon": user.user_icon,
             "introduction_text": user.introduction_text,
+            "display_name": user.display_name,
+            "email": user.email,
         },
         "articles": article_data,
+        "stats": stats,
     }
+    
+    print(f"✅ レスポンス送信完了: user_id={user_id}")
+    return response_data
 
 @app.post("/mypage/{user_id}")
 async def edit_user(

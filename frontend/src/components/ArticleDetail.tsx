@@ -4,6 +4,7 @@ import axios from "axios";
 import DOMPurify from "dompurify";
 import Showdown from "showdown";
 import { API_BASE_URL } from '../config/api';
+import { updateOGP, resetOGP, generateArticleOGP } from '../utils/ogp';
  
 import { useAuth } from "../contexts/authContext";
 import AuthModal from "../components/AuthModal";
@@ -217,6 +218,16 @@ const ArticleDetail: React.FC = () => {
         try {
             const response = await axios.get(`${API_BASE_URL}/articles/${id}`);
             setArticle(response.data);
+            
+            // 🎯 OGPメタタグを記事固有の内容に更新
+            const ogpData = generateArticleOGP({
+                id: response.data.id,
+                title: response.data.title,
+                content: response.data.content,
+                thumbnail_image: response.data.thumbnail_url
+            });
+            updateOGP(ogpData);
+            
         } catch (err: any) {
             console.error("Failed to fetch data:", err);
             setError("記事の取得に失敗しました");
@@ -227,6 +238,11 @@ const ArticleDetail: React.FC = () => {
 
     useEffect(() => {
         fetchArticle();
+        
+        // 🔄 コンポーネント破棄時にOGPをデフォルトに戻す
+        return () => {
+            resetOGP();
+        };
     }, [id]);
 
     const formatDate = (date: string) => {

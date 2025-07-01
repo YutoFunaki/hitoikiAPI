@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import ArticleCard from "./ArticleCard"; // adjust path as necessary
+import ArticleCard from "./ArticleCard";
 import { useAuth } from "../contexts/authContext";
 import { API_BASE_URL } from '../config/api';
 
@@ -15,28 +15,83 @@ interface Article {
   category?: string[];
 }
 
+interface Stats {
+  total_articles: number;
+  total_likes: number;
+  total_access: number;
+  total_comments: number;
+  member_since: string;
+}
+
+interface MyPageData {
+  user: {
+    id: number;
+    username: string;
+    user_icon: string;
+    introduction_text: string;
+    display_name?: string;
+    email?: string;
+  };
+  articles: Article[];
+  stats: Stats;
+}
+
 const MyPage: React.FC = () => {
-  const { user, login } = useAuth();
-  const [articles, setArticles] = useState<Article[]>([]);
+  const { user, login, isAuthenticated } = useAuth();
+  const [data, setData] = useState<MyPageData | null>(null);
   const [editing, setEditing] = useState(false);
   const [editedUsername, setEditedUsername] = useState("");
   const [editedIntro, setEditedIntro] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'articles' | 'likes' | 'history'>('articles');
 
   useEffect(() => {
-    if (!user?.id) return;
+    console.log("🔍 MyPage useEffect 実行中...");
+    console.log("📝 認証状態:", { isAuthenticated, user: user?.id });
+    console.log("🌐 API_BASE_URL:", API_BASE_URL);
+    
+    if (!user?.id) {
+      console.log("❌ ユーザーIDが見つかりません");
+      setLoading(false);
+      return;
+    }
+    
+    const apiUrl = `${API_BASE_URL}/mypage/${user.id}`;
+    const token = localStorage.getItem('token');
+    console.log("🌐 APIリクエスト送信:", apiUrl);
+    console.log("🔑 認証トークン存在:", !!token);
+    console.log("👤 ユーザー情報:", user);
+    
+    // 認証ヘッダーを含めてリクエスト送信
+    const config = token ? {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    } : {};
     
     axios
-      .get(`${API_BASE_URL}/mypage/${user.id}`)
+      .get(apiUrl, config)
       .then((res) => {
+        console.log("✅ APIレスポンス成功:", res.data);
+        setData(res.data);
         setEditedUsername(res.data.user.username);
         setEditedIntro(res.data.user.introduction_text || "");
-        setArticles(res.data.articles);
       })
-      .catch((err) => console.error("❌ APIエラー:", err))
-      .finally(() => setLoading(false));
-  }, [user?.id]);
+      .catch((err) => {
+        console.error("❌ APIエラー:", err);
+        console.error("❌ エラー詳細:", {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data,
+          url: apiUrl
+        });
+      })
+      .finally(() => {
+        console.log("🏁 APIリクエスト完了");
+        setLoading(false);
+      });
+  }, [user?.id, isAuthenticated]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -49,9 +104,9 @@ const MyPage: React.FC = () => {
       await axios.post(`${API_BASE_URL}/mypage/${user.id}`, formData);
   
       const res = await axios.get(`${API_BASE_URL}/mypage/${user.id}`);
+      setData(res.data);
       setEditedUsername(res.data.user.username);
       setEditedIntro(res.data.user.introduction_text || "");
-      setArticles(res.data.articles);
       setSelectedFile(null);
       setEditing(false);
 
@@ -68,77 +123,184 @@ const MyPage: React.FC = () => {
       console.error("❌ プロフィール更新失敗:", err);
     }
   };
-  
+
+  if (loading) {
+    return (
+      <div className="mypage-loading">
+        <div className="loading-spinner"></div>
+        <p>マイページを読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="mypage-error">
+        <h2>😔 データの取得に失敗しました</h2>
+        <p>マイページの情報を読み込むことができませんでした。</p>
+        <button onClick={() => window.location.reload()}>再読み込み</button>
+      </div>
+    );
+  }
 
   return (
     <div className="mypage-container">
-      <h2>マイページ</h2>
+      {/* ヘッダーセクション */}
+      <div className="mypage-header">
+        <div className="profile-section">
+          <div className="profile-avatar">
+            <img
+              src={data.user.user_icon || '/cat_icon.png'}
+              alt="プロフィール画像"
+              className="avatar-image"
+            />
+            {editing && (
+              <div className="avatar-upload">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    setSelectedFile(e.target.files ? e.target.files[0] : null)
+                  }
+                  id="avatar-input"
+                />
+                <label htmlFor="avatar-input" className="upload-button">
+                  📷 変更
+                </label>
+              </div>
+            )}
+          </div>
 
-      {user && (
-        <div
-          className="user-profile"
-          style={{
-            border: "1px solid #ddd",
-            padding: "1rem",
-            borderRadius: "8px",
-            maxWidth: "400px",
-          }}
-        >
-          <img
-            src={user.user_icon}
-            alt="User Icon"
-            width={80}
-            height={80}
-            style={{ borderRadius: "50%", objectFit: "cover" }}
-          />
-
-          {editing ? (
-            <>
-              <input
-                type="text"
-                value={editedUsername}
-                onChange={(e) => setEditedUsername(e.target.value)}
-                placeholder="ユーザー名"
-                style={{ display: "block", margin: "0.5rem 0", width: "100%" }}
-              />
-              <textarea
-                value={editedIntro}
-                onChange={(e) => setEditedIntro(e.target.value)}
-                placeholder="自己紹介"
-                style={{ display: "block", marginBottom: "0.5rem", width: "100%" }}
-              />
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) =>
-                  setSelectedFile(e.target.files ? e.target.files[0] : null)
-                }
-                style={{ marginBottom: "0.5rem" }}
-              />
-              <button onClick={handleSave}>保存</button>
-              <button onClick={() => setEditing(false)}>キャンセル</button>
-            </>
-          ) : (
-            <>
-              <h3>{user.username}</h3>
-              <p>{user.introduction_text}</p>
-              <button onClick={() => setEditing(true)}>プロフィール編集</button>
-            </>
-          )}
+          <div className="profile-info">
+            {editing ? (
+              <div className="edit-form">
+                <input
+                  type="text"
+                  value={editedUsername}
+                  onChange={(e) => setEditedUsername(e.target.value)}
+                  placeholder="ユーザー名"
+                  className="edit-input"
+                />
+                <textarea
+                  value={editedIntro}
+                  onChange={(e) => setEditedIntro(e.target.value)}
+                  placeholder="自己紹介文を入力してください..."
+                  className="edit-textarea"
+                  rows={4}
+                />
+                <div className="edit-actions">
+                  <button onClick={handleSave} className="save-button">
+                    ✅ 保存
+                  </button>
+                  <button onClick={() => setEditing(false)} className="cancel-button">
+                    ❌ キャンセル
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="profile-display">
+                <h1 className="username">{data.user.username}</h1>
+                <p className="introduction">
+                  {data.user.introduction_text || "自己紹介文はまだ設定されていません。"}
+                </p>
+                <p className="member-since">📅 {data.stats.member_since}からのメンバー</p>
+                <button onClick={() => setEditing(true)} className="edit-button">
+                  ✏️ プロフィール編集
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      )}
 
-      <div className="user-articles" style={{ marginTop: "2rem" }}>
-        <h3>投稿記事一覧</h3>
-        {loading ? (
-          <p>読み込み中...</p>
-        ) : articles.length === 0 ? (
-          <p>まだ記事が投稿されていません。</p>
-        ) : (
-          <div>
-            {articles.map((article) => (
-              <ArticleCard key={article.id} article={article} />
-            ))}
+        {/* 統計情報 */}
+        <div className="stats-section">
+          <div className="stat-card">
+            <div className="stat-number">{data.stats.total_articles}</div>
+            <div className="stat-label">投稿記事</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-number">{data.stats.total_likes}</div>
+            <div className="stat-label">総いいね数</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-number">{data.stats.total_access}</div>
+            <div className="stat-label">総アクセス数</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-number">{data.stats.total_comments}</div>
+            <div className="stat-label">総コメント数</div>
+          </div>
+        </div>
+      </div>
+
+      {/* タブセクション */}
+      <div className="mypage-tabs">
+        <button
+          className={`tab-button ${activeTab === 'articles' ? 'active' : ''}`}
+          onClick={() => setActiveTab('articles')}
+        >
+          📝 投稿記事 ({data.stats.total_articles})
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'likes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('likes')}
+        >
+          ❤️ いいねした記事
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'history' ? 'active' : ''}`}
+          onClick={() => setActiveTab('history')}
+        >
+          📖 閲覧履歴
+        </button>
+      </div>
+
+      {/* コンテンツセクション */}
+      <div className="mypage-content">
+        {activeTab === 'articles' && (
+          <div className="articles-section">
+            <h2>投稿記事一覧</h2>
+            {data.articles.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">📝</div>
+                <h3>まだ記事を投稿していません</h3>
+                <p>あなたの最初の記事を投稿してみませんか？</p>
+                <button 
+                  className="post-button"
+                  onClick={() => window.location.href = '/post-article'}
+                >
+                  ✨ 記事を投稿する
+                </button>
+              </div>
+            ) : (
+              <div className="articles-grid">
+                {data.articles.map((article) => (
+                  <ArticleCard key={article.id} article={article} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'likes' && (
+          <div className="likes-section">
+            <div className="empty-state">
+              <div className="empty-icon">❤️</div>
+              <h3>いいねした記事</h3>
+              <p>いいねした記事がここに表示されます。</p>
+              <p className="note">※この機能は近日中に実装予定です</p>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="history-section">
+            <div className="empty-state">
+              <div className="empty-icon">📖</div>
+              <h3>閲覧履歴</h3>
+              <p>閲覧した記事の履歴がここに表示されます。</p>
+              <p className="note">※この機能は近日中に実装予定です</p>
+            </div>
           </div>
         )}
       </div>
