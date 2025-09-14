@@ -5,59 +5,162 @@ import Showdown from "showdown";
 import "react-mde/lib/styles/css/react-mde-all.css";
 import axios from "axios";
 import { API_BASE_URL } from '../config/api';
+import { useAuth } from "../contexts/authContext";
 
 const EditArticle: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { articleId } = useParams<{ articleId: string }>();
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+  
+  // デバッグ情報
+  console.log(`🔗 URL パラメータ取得: articleId=${articleId}`);
+  console.log(`🌐 現在のURL: ${window.location.href}`);
+  console.log(`📡 API_BASE_URL: ${API_BASE_URL}`);
+  
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [categoryInput, setCategoryInput] = useState("");
   const [selectedTab, setSelectedTab] = useState<"write" | "preview">("write");
   const [mediaFiles, setMediaFiles] = useState<{ file: File; url: string; type: string }[]>([]);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchArticle = async () => {
+      if (!articleId) {
+        console.error("❌ 記事ID不明:", articleId);
+        setError("記事IDが取得できませんでした。URLを確認してください。");
+        setInitialLoading(false);
+        return;
+      }
+      
       try {
-        const res = await axios.get(`${API_BASE_URL}/edit-article/${id}`);
-        setTitle(res.data.title);
-        setContent(res.data.content);
-        setSelectedCategories(res.data.categories.map((catId: string) => Number(catId)));
-        if (res.data.content_image) {
+        setInitialLoading(true);
+        setError(null);
+        
+        console.log(`🔍 記事データ取得開始: article_id=${articleId}`);
+        console.log(`📡 API URL: ${API_BASE_URL}/edit-article/${articleId}`);
+        
+        const res = await axios.get(`${API_BASE_URL}/edit-article/${articleId}`);
+        console.log(`✅ API レスポンス成功:`, res.data);
+        
+        setTitle(res.data.title || "");
+        setContent(res.data.content || "");
+        
+        // カテゴリの処理 - 文字列の配列として扱う
+        if (res.data.categories) {
+          const categories = Array.isArray(res.data.categories) 
+            ? res.data.categories 
+            : res.data.categories.split(',').map((cat: string) => cat.trim());
+          setSelectedCategories(categories);
+          console.log(`🏷️ カテゴリ設定完了:`, categories);
+        }
+        
+        // メディアファイルの処理
+        if (res.data.content_image && res.data.content_image.length > 0) {
           const media = res.data.content_image.map((url: string) => ({
             file: new File([""], url.split("/").pop() || "media", { type: "image/jpeg" }),
             url: url.startsWith("http") ? url : `${API_BASE_URL}${url}`,
             type: "image/jpeg",
           }));
           setMediaFiles(media);
+          console.log(`📷 メディアファイル設定完了:`, media);
         }
-      } catch (err) {
-        console.error("記事取得失敗:", err);
+        
+        // サムネイルの処理
+        if (res.data.thumbnail_image) {
+          // 既存のサムネイルファイル情報を保持
+          const thumbnailFileName = res.data.thumbnail_image.split("/").pop() || "thumbnail";
+          setThumbnailFile(new File([""], thumbnailFileName, { type: "image/jpeg" }));
+          console.log(`🖼️ サムネイル設定完了:`, thumbnailFileName);
+        }
+        
+        console.log(`🎉 記事データ取得完了: ${res.data.title}`);
+        
+      } catch (err: any) {
+        console.error("❌ 記事取得エラー:", err);
+        
+        // 詳細なエラー情報を収集
+        let errorMessage = "記事を取得できませんでした。";
+        
+        if (err.response) {
+          // HTTPエラーレスポンス
+          console.error("HTTP エラー:", err.response.status, err.response.data);
+          errorMessage = `HTTP ${err.response.status}: ${err.response.data?.detail || err.response.statusText}`;
+        } else if (err.request) {
+          // リクエストが送信されたが、レスポンスが受信されなかった
+          console.error("リクエストエラー:", err.request);
+          errorMessage = "サーバーに接続できませんでした。ネットワークを確認してください。";
+        } else {
+          // その他のエラー
+          console.error("その他のエラー:", err.message);
+          errorMessage = err.message || "不明なエラーが発生しました。";
+        }
+        
+        setError(errorMessage);
+      } finally {
+        setInitialLoading(false);
       }
     };
 
     fetchArticle();
-  }, [id]);
+  }, [articleId]);
+
+  const handleCategoryKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && categoryInput.trim()) {
+      e.preventDefault();
+      const newCat = categoryInput.trim();
+      if (!selectedCategories.includes(newCat)) {
+        setSelectedCategories([...selectedCategories, newCat]);
+      }
+      setCategoryInput("");
+    }
+  };
+
+  const removeCategory = (cat: string) => {
+    setSelectedCategories(prev => prev.filter(c => c !== cat));
+  };
 
   const handleSubmit = async () => {
-    try {
-      setLoading(true);
-      const userId = localStorage.getItem("userId");
-      if (!userId) {
-        alert("ログインしてください");
-        return;
-      }
+    if (!title || selectedCategories.length === 0 || !content) {
+      alert("タイトル、カテゴリ、本文をすべて入力してください。");
+      return;
+    }
+
+          try {
+        setLoading(true);
+        
+        // 認証チェック
+        if (!isAuthenticated || !user?.id) {
+          console.error("認証エラー:", { isAuthenticated, userId: user?.id });
+          alert("ログインしてください");
+          return;
+        }
 
       const formData = new FormData();
       formData.append("title", title);
       formData.append("content", content);
       formData.append("categories", JSON.stringify(selectedCategories));
       formData.append("public_status", "public");
-      formData.append("update_user_id", userId.toString());
-      mediaFiles.forEach(({ file }) => formData.append("files", file));
+      formData.append("update_user_id", user?.id?.toString() || ""); // ログインユーザーのIDを使用
+      
+      // サムネイルファイルを追加（新しいファイルが選択された場合）
+      if (thumbnailFile && thumbnailFile.size > 0) {
+        formData.append("thumbnail", thumbnailFile);
+      }
+      
+      mediaFiles.forEach(({ file }) => {
+        if (file.size > 0) { // 実際のファイルのみ追加
+          formData.append("files", file);
+        }
+      });
 
-      const res = await fetch(`${API_BASE_URL}/edit-article/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/edit-article/${articleId}`, {
         method: "post",
         body: formData,
       });
@@ -65,7 +168,7 @@ const EditArticle: React.FC = () => {
       if (!res.ok) throw new Error("更新に失敗しました");
 
       alert("記事を更新しました！");
-      navigate(`/article/${id}`);
+      navigate(`/articles/${articleId}`);
     } catch (err) {
       console.error("更新エラー:", err);
       alert("記事の更新に失敗しました");
@@ -81,9 +184,15 @@ const EditArticle: React.FC = () => {
   const handleFileUpload = async (files: FileList | null) => {
     if (!files) return;
 
+    setUploading(true);
     const uploadedFiles: { file: File; url: string; type: string }[] = [];
 
     for (const file of Array.from(files)) {
+      if (!["image/jpeg", "image/png", "video/mp4", "video/quicktime"].includes(file.type)) {
+        alert(`${file.name} は無効な形式です。`);
+        continue;
+      }
+
       const formData = new FormData();
       formData.append("file", file);
 
@@ -100,17 +209,19 @@ const EditArticle: React.FC = () => {
         uploadedFiles.push({ file, url: fullUrl, type: file.type });
       } catch (error) {
         console.error("アップロードエラー:", error);
+        alert(`${file.name} のアップロードに失敗しました`);
       }
     }
 
     setMediaFiles((prev) => [...prev, ...uploadedFiles]);
+    setUploading(false);
   };
 
   const handleInsertMedia = (url: string, type: string) => {
     const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
 
     if (fullUrl.startsWith("blob:")) {
-      alert("アップロード完了をお待ちください");
+      alert("アップロードが完了するまで少々お待ちください・・・");
       return;
     }
 
@@ -140,22 +251,41 @@ const EditArticle: React.FC = () => {
     replace: '<video src="$1" $2 style="max-width:100%; max-height:300px; display:block; margin:10px auto;"></video>'
   }, "videoResizer");
 
-  const categoryOptions = [
-    { id: 1, name: "技術" },
-    { id: 2, name: "ビジネス" },
-    { id: 3, name: "ライフスタイル" },
-    { id: 4, name: "エンタメ" },
-    { id: 5, name: "健康" },
-  ];
+  // 初期ローディング状態
+  if (initialLoading) {
+    return (
+      <div className="post-article-page">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>記事を読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // エラー状態
+  if (error) {
+    return (
+      <div className="post-article-page">
+        <div className="error-container">
+          <h2>❌ エラーが発生しました</h2>
+          <p>{error}</p>
+          <button onClick={() => navigate(-1)}>戻る</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="post-article-page">
-      <h1>記事を編集</h1>
+      <div className="page-header">
+        <h1>✏️ 記事を編集</h1>
+        <p>記事の内容を編集して更新してください</p>
+      </div>
 
       <div className="form-group">
-        <label htmlFor="title">タイトル</label>
+        <label>📝 タイトル</label>
         <input
-          id="title"
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -164,70 +294,120 @@ const EditArticle: React.FC = () => {
       </div>
 
       <div className="form-group">
-        <label>カテゴリ</label>
-        <div className="categories">
-          {categoryOptions.map((cat) => (
-            <label key={cat.id} className="category-item">
-              <input
-                type="checkbox"
-                value={cat.id}
-                checked={selectedCategories.includes(cat.id)}
-                onChange={() =>
-                  setSelectedCategories((prev) =>
-                    prev.includes(cat.id)
-                      ? prev.filter((id) => id !== cat.id)
-                      : [...prev, cat.id]
-                  )
-                }
-              />
-              {cat.name}
-            </label>
+        <label>🖼️ サムネイル画像</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) setThumbnailFile(file);
+          }}
+        />
+        {thumbnailFile && (
+          <div className="thumbnail-preview">
+            <p>選択されたファイル: {thumbnailFile.name}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="form-group">
+        <label>🏷️ カテゴリ（自由入力・Enterで追加）</label>
+        <div className="tag-input-wrapper">
+          {selectedCategories.map((cat, index) => (
+            <span key={index} className="tag">
+              {cat}
+              <button type="button" onClick={() => removeCategory(cat)}>×</button>
+            </span>
           ))}
+          <input
+            type="text"
+            value={categoryInput}
+            onChange={(e) => setCategoryInput(e.target.value)}
+            onKeyDown={handleCategoryKeyDown}
+            placeholder="Enterで追加"
+          />
         </div>
       </div>
 
-      <ReactMde
-        value={content}
-        onChange={setContent}
-        selectedTab={selectedTab}
-        onTabChange={setSelectedTab}
-        generateMarkdownPreview={(markdown) =>
-          Promise.resolve(`<div class="react-mde-preview">${converter.makeHtml(markdown)}</div>`)
-        }
-      />
-
-      <input
-        type="file"
-        ref={fileInputRef}
-        style={{ display: "none" }}
-        multiple
-        accept="image/*,video/*"
-        onChange={(e) => handleFileUpload(e.target.files)}
-      />
-      <button onClick={handleFileUploadClick} disabled={loading}>
-        画像・動画を追加
-      </button>
-
-      <div className="media-preview">
-        {mediaFiles.map(({ file, url, type }, index) => (
-          <div key={index} className="media-item">
-            {type.startsWith("image/") && (
-              <img src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} alt={file.name} style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
-            )}
-            {type.startsWith("video/") && (
-              <video src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} controls style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} />
-            )}
-            <span style={{ fontSize: "12px", marginTop: "5px" }}>{file.name}</span>
-            <button onClick={() => handleInsertMedia(url, type)} style={{ fontSize: "12px" }}>
-              本文に挿入
-            </button>
-          </div>
-        ))}
+      <div className="form-group">
+        <label>✍️ 本文</label>
+        <ReactMde
+          value={content}
+          onChange={setContent}
+          selectedTab={selectedTab}
+          onTabChange={setSelectedTab}
+          generateMarkdownPreview={(markdown) =>
+            Promise.resolve(`<div class="react-mde-preview">${converter.makeHtml(markdown)}</div>`)
+          }
+        />
       </div>
 
-      <button onClick={handleSubmit} disabled={loading}>
-        {loading ? "更新中..." : "記事を更新する"}
-      </button>
+      <div className="media-upload-section">
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: "none" }}
+          multiple
+          accept="image/*,video/*"
+          onChange={(e) => handleFileUpload(e.target.files)}
+        />
+        <button className="upload-button" onClick={handleFileUploadClick} disabled={uploading}>
+          {uploading ? "📤 アップロード中..." : "📷 画像・動画を追加"}
+        </button>
+        <p style={{ marginTop: '8px', color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+          JPEG, PNG, MP4, MOV形式をサポート
+        </p>
+      </div>
+
+      {uploading && (
+        <div className="upload-status">
+          <p>📤 アップロード中...</p>
+        </div>
+      )}
+
+      {mediaFiles.length > 0 && (
+        <div className="media-preview">
+          {mediaFiles.map(({ file, url, type }, index) => (
+            <div key={index} className="media-item">
+              {type.startsWith("image/") && (
+                <img 
+                  src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} 
+                  alt={file.name} 
+                  style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} 
+                />
+              )}
+              {type.startsWith("video/") && (
+                <video 
+                  src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} 
+                  controls 
+                  style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} 
+                />
+              )}
+              <span>{file.name}</span>
+              <button onClick={() => handleInsertMedia(url, type)}>
+                📝 本文に挿入
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="submit-section">
+        <button 
+          className="submit-button update-button" 
+          onClick={handleSubmit} 
+          disabled={loading || uploading}
+        >
+          {loading ? "🔄 更新中..." : "✅ 記事を更新する"}
+        </button>
+        <button 
+          className="cancel-button" 
+          onClick={() => navigate(-1)}
+          disabled={loading || uploading}
+        >
+          キャンセル
+        </button>
+      </div>
     </div>
   );
 };

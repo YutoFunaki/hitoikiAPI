@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import ArticleCard from "./ArticleCard";
 import { useAuth } from "../contexts/authContext";
@@ -37,8 +37,6 @@ interface MyPageData {
 }
 
 const MyPage: React.FC = () => {
-  console.log("🚀 MyPage コンポーネントがマウントされました！");
-  
   const { user, login, isAuthenticated } = useAuth();
   const [data, setData] = useState<MyPageData | null>(null);
   const [editing, setEditing] = useState(false);
@@ -47,43 +45,25 @@ const MyPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'articles' | 'likes' | 'history'>('articles');
-  
-  console.log("📊 初期レンダー時の状態:", { 
-    isAuthenticated, 
-    userId: user?.id, 
-    username: user?.username,
-    loading 
-  });
+
+  // メモ化された記事リスト
+  const memoizedArticles = useMemo(() => {
+    return data?.articles || [];
+  }, [data?.articles]);
 
   useEffect(() => {
-    console.log("🔍 MyPage useEffect 実行中...");
-    console.log("📝 認証状態:", { isAuthenticated, user: user?.id });
-    console.log("🌐 API_BASE_URL:", API_BASE_URL);
-    
     // 認証状態が初期化中の場合は待機
     if (isAuthenticated === undefined) {
-      console.log("⏳ 認証状態初期化中...");
       return;
     }
     
-    if (!isAuthenticated) {
-      console.log("❌ 未認証ユーザー");
-      setLoading(false);
-      return;
-    }
-    
-    if (!user?.id) {
-      console.log("❌ ユーザーIDが見つかりません");
-      console.log("🔍 ユーザーオブジェクト詳細:", user);
+    if (!isAuthenticated || !user?.id) {
       setLoading(false);
       return;
     }
     
     const apiUrl = `${API_BASE_URL}/mypage/${user.id}`;
     const token = localStorage.getItem('token');
-    console.log("🌐 APIリクエスト送信:", apiUrl);
-    console.log("🔑 認証トークン存在:", !!token);
-    console.log("👤 ユーザー情報:", user);
     
     // 認証ヘッダーを含めてリクエスト送信
     const config = token ? {
@@ -95,22 +75,14 @@ const MyPage: React.FC = () => {
     axios
       .get(apiUrl, config)
       .then((res) => {
-        console.log("✅ APIレスポンス成功:", res.data);
         setData(res.data);
         setEditedUsername(res.data.user.username);
         setEditedIntro(res.data.user.introduction_text || "");
       })
       .catch((err) => {
-        console.error("❌ APIエラー:", err);
-        console.error("❌ エラー詳細:", {
-          status: err.response?.status,
-          statusText: err.response?.statusText,
-          data: err.response?.data,
-          url: apiUrl
-        });
+        console.error("MyPage API Error:", err.response?.status, err.response?.data);
       })
       .finally(() => {
-        console.log("🏁 APIリクエスト完了");
         setLoading(false);
       });
   }, [user?.id, isAuthenticated]);
@@ -305,7 +277,7 @@ const MyPage: React.FC = () => {
         {activeTab === 'articles' && (
           <div className="articles-section">
             <h2>投稿記事一覧</h2>
-            {data.articles.length === 0 ? (
+            {memoizedArticles.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">📝</div>
                 <h3>まだ記事を投稿していません</h3>
@@ -319,7 +291,7 @@ const MyPage: React.FC = () => {
               </div>
             ) : (
               <div className="articles-grid">
-                {data.articles.map((article) => (
+                {memoizedArticles.map((article) => (
                   <ArticleCard key={article.id} article={article} />
                 ))}
               </div>

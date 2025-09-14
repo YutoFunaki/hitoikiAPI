@@ -29,8 +29,8 @@ const getApiBaseUrl = (): string => {
     return `${currentOrigin}/api`;
   }
 
-  // 開発環境のデフォルト
-  return "http://localhost:8000";
+  // 開発環境ではViteのproxyを使用
+  return "/api";
 };
 
 export const API_BASE_URL = getApiBaseUrl();

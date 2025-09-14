@@ -279,6 +279,26 @@ const ArticleDetail: React.FC = () => {
         }
     };
 
+    const handleDelete = async () => {
+        if (!article) return;
+        
+        // 削除確認ダイアログ
+        const confirmDelete = window.confirm(
+            `「${article.title}」を本当に削除しますか？\n\nこの操作は取り消せません。`
+        );
+        
+        if (!confirmDelete) return;
+        
+        try {
+            await axios.delete(`${API_BASE_URL}/articles/${article.id}`);
+            alert("記事が削除されました");
+            navigate("/"); // ホームページに戻る
+        } catch (error) {
+            console.error("記事の削除に失敗しました:", error);
+            alert("記事の削除に失敗しました。再度お試しください。");
+        }
+    };
+
     const handleLike = async () => {
         if (!isAuthenticated) {
             setShowAuthModal(true);
@@ -422,12 +442,20 @@ const ArticleDetail: React.FC = () => {
                 </div>
             </div>
             {isAuthenticated && article.user.id === user?.id && (
-                <button
-                    onClick={() => navigate(`/edit-article/${article.id}`)}
-                    className="edit-button"
-                >
-                    ✏️ 編集
-                </button>
+                <div className="article-actions">
+                    <button
+                        onClick={() => navigate(`/edit-article/${article.id}`)}
+                        className="edit-button"
+                    >
+                        ✏️ 編集
+                    </button>
+                    <button
+                        onClick={handleDelete}
+                        className="delete-button"
+                    >
+                        🗑️ 削除
+                    </button>
+                </div>
             )}
             <div className="article-content">
                 <div className="markdown-content" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />

@@ -1,6 +1,7 @@
 import axios from "axios";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/authContext";
 import { API_BASE_URL } from '../config/api';
 
 const Login: React.FC = () => {
@@ -8,6 +9,7 @@ const Login: React.FC = () => {
     const [password, setPassword] = useState<string>("");
     const [error, setError] = useState<string>("");
     const navigate = useNavigate();
+    const { login } = useAuth();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -19,8 +21,9 @@ const Login: React.FC = () => {
             });
 
             const { token, user } = response.data;
-            localStorage.setItem("authToken", token); // トークンをローカルストレージに保存
-            localStorage.setItem("user", JSON.stringify(user));
+            
+            // AuthContextのlogin関数を使用して認証状態を設定
+            login(token, user);
 
             // ログイン後にホームページにリダイレクト
             navigate("/");

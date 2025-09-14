@@ -17,7 +17,7 @@ interface ArticleCardProps {
     article: Article;
 }
 
-const ArticleCard: React.FC<ArticleCardProps> = ({ article }) => {
+const ArticleCard: React.FC<ArticleCardProps> = React.memo(({ article }) => {
     const formatDate = (date?: string) => {
         if (!date) return '';
         const d = new Date(date);
@@ -32,7 +32,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article }) => {
     };
 
     return (
-        <Link to={`/article/${article.id}`} className="article-card-link">
+        <Link to={`/articles/${article.id}`} className="article-card-link">
             <div className="article-card">
                 <div className="card-thumbnail">
                     {article.thumbnail_url ? (
@@ -40,6 +40,16 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article }) => {
                             src={article.thumbnail_url}
                             alt={article.title}
                             className="thumbnail-image"
+                            loading="lazy"
+                            width="400"
+                            height="300"
+                            style={{ 
+                                objectFit: 'cover',
+                                width: '100%',
+                                height: 'auto'
+                            }}
+                            // 低品質画像を優先表示してパフォーマンス向上
+                            decoding="async"
                         />
                     ) : (
                         <div className="placeholder-thumbnail" />
@@ -59,6 +69,9 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article }) => {
             </div>
         </Link>
     );
-};
+});
+
+// displayNameを設定してデバッグを改善
+ArticleCard.displayName = 'ArticleCard';
 
 export default ArticleCard;

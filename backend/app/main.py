@@ -651,25 +651,93 @@ async def upload_media(file: UploadFile = File(...)):
                 
                 image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-            # **最適化された圧縮設定**
+            # **最適化された圧縮設定（通信量削減）**
             buffer = BytesIO()
             image.save(buffer, 
                       format="JPEG", 
-                      quality=70,  # 品質を70%に調整（高速化）
+                      quality=60,  # 品質を60%に調整（通信量削減）
                       optimize=True,  # ファイルサイズ最適化
                       progressive=True)  # プログレッシブJPEG（読み込み高速化）
             
             async with aiofiles.open(file_path, "wb") as out_file:
                 await out_file.write(buffer.getvalue())
+            
+            # **サムネイル画像の作成（さらなる通信量削減）**
+            thumbnail_size = (400, 400)  # 400x400のサムネイル
+            thumb_image = image.copy()
+            thumb_image.thumbnail(thumbnail_size, Image.Resampling.LANCZOS)
+            
+            # サムネイル用ファイル名
+            thumb_filename = f"{uuid.uuid4()}_thumb.jpg"
+            thumb_path = os.path.join(UPLOAD_DIRECTORY, thumb_filename)
+            
+            # サムネイル保存（さらに低品質で圧縮）
+            thumb_buffer = BytesIO()
+            thumb_image.save(thumb_buffer, 
+                           format="JPEG", 
+                           quality=50,  # サムネイルは50%品質
+                           optimize=True)
+            
+            async with aiofiles.open(thumb_path, "wb") as thumb_file:
+                await thumb_file.write(thumb_buffer.getvalue())
+            
+            # サムネイルURLも返す
+            thumbnail_url = f"{get_base_url()}/static/{thumb_filename}"
 
+        elif extension in ["mp4", "mov", "avi", "mkv"]:
+            # **動画ファイルの圧縮処理**
+            import ffmpeg
+            
+            # 一時的に元ファイルを保存
+            temp_path = f"{file_path}.temp"
+            async with aiofiles.open(temp_path, "wb") as temp_file:
+                content = await file.read()
+                await temp_file.write(content)
+            
+            try:
+                # FFmpegで動画を圧縮
+                (
+                    ffmpeg
+                    .input(temp_path)
+                    .output(
+                        file_path,
+                        vcodec='libx264',  # H.264コーデック
+                        crf=28,           # 圧縮率（18-28推奨、大きいほど圧縮）
+                        preset='fast',    # エンコード速度
+                        acodec='aac',     # 音声コーデック
+                        audio_bitrate='128k',  # 音声ビットレート
+                        vf='scale=1280:720',   # 720p解像度に制限
+                        movflags='faststart'   # Web最適化
+                    )
+                    .overwrite_output()  # 既存ファイル上書き
+                    .run(quiet=True)     # ログ抑制
+                )
+                
+                # 一時ファイル削除
+                os.remove(temp_path)
+                
+            except Exception as video_error:
+                # 動画圧縮に失敗した場合は元ファイルをそのまま使用
+                print(f"動画圧縮エラー: {video_error}")
+                if os.path.exists(temp_path):
+                    os.rename(temp_path, file_path)
         else:
-            # **動画ファイル（MP4, MOVなど）はそのまま保存**
+            # **その他のファイルはそのまま保存**
             async with aiofiles.open(file_path, "wb") as out_file:
                 content = await file.read()
                 await out_file.write(content)
 
         file_url = f"{get_base_url()}/static/{new_filename}"
-        return {"filename": new_filename, "url": file_url}
+        
+        # 画像の場合はサムネイルURLも返す
+        if extension in ["jpg", "jpeg", "png"]:
+            return {
+                "filename": new_filename, 
+                "url": file_url,
+                "thumbnail_url": thumbnail_url  # サムネイル用URL
+            }
+        else:
+            return {"filename": new_filename, "url": file_url}
 
     except HTTPException as http_err:
         raise http_err
@@ -728,11 +796,11 @@ async def post_article(
                     
                     image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
                 
-                # 高品質圧縮
+                # 通信量削減のための圧縮
                 buffer = BytesIO()
                 image.save(buffer, 
                           format="JPEG", 
-                          quality=75,  # サムネイルは少し高品質
+                          quality=60,  # 通信量削減のため品質を下げる
                           optimize=True,
                           progressive=True)
                 
@@ -816,6 +884,8 @@ def get_article(article_id: int, db: Session = Depends(get_db)):
         "content": article.content,
         "public_status": article.public_status,
         "categories": article.category,  # ARRAY(String)
+        "content_image": article.content_image or [],  # メディアファイルのリスト
+        "thumbnail_image": article.thumbnail_image,  # サムネイル画像
         "user_id": article.create_user_id,
         "user": {
             "id": user.id,
@@ -874,6 +944,56 @@ async def edit_article(
     db.commit()
     db.refresh(article)
     return {"message": "記事が更新されました", "article_id": article.id}
+
+
+# 記事削除
+@app.delete("/articles/{article_id}")
+def delete_article(article_id: int, db: Session = Depends(get_db)):
+    """記事を削除する"""
+    try:
+        # 記事を取得
+        article = db.query(Article).filter(Article.id == article_id).first()
+        if not article:
+            raise HTTPException(status_code=404, detail="記事が見つかりません")
+        
+        # 関連するファイルも削除
+        if article.content_image:
+            for image_url in article.content_image:
+                if image_url.startswith("/static/"):
+                    file_path = os.path.join("static", image_url.replace("/static/", ""))
+                    if os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                        except Exception as e:
+                            print(f"ファイル削除エラー: {e}")
+        
+        # サムネイル画像も削除
+        if article.thumbnail_image and article.thumbnail_image.startswith(f"{get_base_url()}/static/"):
+            thumbnail_filename = article.thumbnail_image.replace(f"{get_base_url()}/static/", "")
+            thumbnail_path = os.path.join("static", thumbnail_filename)
+            if os.path.exists(thumbnail_path):
+                try:
+                    os.remove(thumbnail_path)
+                except Exception as e:
+                    print(f"サムネイル削除エラー: {e}")
+        
+        # 関連するhistory_ratingレコードも削除
+        db.query(HistoryRating).filter(HistoryRating.article_id == article_id).delete()
+        
+        # 関連するコメントも削除
+        db.query(ArticleComment).filter(ArticleComment.article_id == article_id).delete()
+        
+        # 記事を削除
+        db.delete(article)
+        db.commit()
+        
+        return {"message": "記事が削除されました", "article_id": article_id}
+        
+    except HTTPException as http_err:
+        raise http_err
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"記事の削除に失敗しました: {str(e)}")
 
 # 記事にいいね
 @app.post("/articles/{id}/like")
@@ -1050,6 +1170,105 @@ def get_mypage(user_id: int, db: Session = Depends(get_db)):
     
     print(f"✅ レスポンス送信完了: user_id={user_id}")
     return response_data
+
+# 🌐 記事専用HTMLページ（OGP対応）
+@app.get("/articles/{article_id}/html")
+def get_article_html(article_id: int, db: Session = Depends(get_db)):
+    """記事詳細のHTMLページを生成（OGP対応）"""
+    print(f"🔍 記事HTML生成: article_id={article_id}")
+    
+    # 記事を取得
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    # 記事の統計情報を取得
+    history = (
+        db.query(HistoryRating)
+        .filter(HistoryRating.article_id == article.id)
+        .first()
+    )
+    
+    # 記事作成者の情報を取得
+    author = db.query(User).filter(User.id == article.create_user_id).first()
+    
+    # OGP用の説明文を生成（最初の150文字）
+    import re
+    description = article.content or ""
+    # Markdown記号とMedia参照を除去
+    description = re.sub(r'!\[Media\]\([^)]*\)', '', description)  # ![Media](URL)を除去
+    description = re.sub(r'[#*`_\[\]()!]', '', description)  # Markdown記号を除去
+    description = re.sub(r'\n+', ' ', description)  # 改行をスペースに変換
+    description = re.sub(r'\s+', ' ', description).strip()  # 複数スペースを1つに
+    description = description[:150] + '...' if len(description) > 150 else description
+    
+    # 空の場合はデフォルト説明文を使用
+    if not description.strip():
+        description = "Calmie(カルミー)で投稿された記事をお楽しみください。"
+    
+    # サムネイル画像の決定
+    thumbnail_url = article.thumbnail_image if article.thumbnail_image else f"{get_base_url()}/static/cat_icon.png"
+    
+    # HTMLテンプレートを生成
+    html_content = f"""<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="{get_base_url()}/static/cat_icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{article.title} | Calmie(カルミー)</title>
+    
+    <!-- SEO & Description -->
+    <meta name="description" content="{description}" />
+    <meta name="keywords" content="癒し,ニュース,コミュニティ,カルミー,心の安らぎ,リラックス,ストレス解消" />
+    <meta name="author" content="{author.username if author else 'Calmie Team'}" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Calmie(カルミー)" />
+    <meta property="og:title" content="{article.title}" />
+    <meta property="og:description" content="{description}" />
+    <meta property="og:url" content="{get_base_url().replace('/api', '')}/articles/{article.id}" />
+    <meta property="og:image" content="{thumbnail_url}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="{article.title}" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="article:author" content="{author.username if author else 'Calmie Team'}" />
+    <meta property="article:published_time" content="{article.public_at.isoformat()}" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@calmie_news" />
+    <meta name="twitter:creator" content="@calmie_news" />
+    <meta name="twitter:title" content="{article.title}" />
+    <meta name="twitter:description" content="{description}" />
+    <meta name="twitter:image" content="{thumbnail_url}" />
+    <meta name="twitter:image:alt" content="{article.title}" />
+    
+    <!-- Additional Meta Tags -->
+    <meta name="theme-color" content="#765e5e" />
+    <link rel="canonical" href="{get_base_url().replace('/api', '')}/articles/{article.id}" />
+    
+    <!-- リダイレクト用JavaScript -->
+    <script>
+        // SPAにリダイレクト
+        window.location.href = '{get_base_url().replace('/api', '')}/articles/{article.id}';
+    </script>
+</head>
+<body>
+    <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+        <h1>{article.title}</h1>
+        <p>リダイレクト中...</p>
+        <p><a href="{get_base_url().replace('/api', '')}/articles/{article.id}">記事を読む</a></p>
+    </div>
+</body>
+</html>"""
+    
+    print(f"✅ 記事HTML生成完了: {article.title}")
+    
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=html_content)
 
 @app.post("/mypage/{user_id}")
 async def edit_user(

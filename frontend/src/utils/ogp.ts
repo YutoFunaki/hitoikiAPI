@@ -71,7 +71,7 @@ const updateCanonicalLink = (url: string) => {
 // OGPメタタグをデフォルト値にリセットする関数
 export const resetOGP = () => {
   updateOGP({
-    title: 'Calmie(カルミー) - 心を落ち着けるニュース&コミュニティ',
+    title: 'Calmie(カルミー)',
     description: '心を落ち着けるニュースとコミュニティ。日々のストレスから解放され、穏やかな気持ちになれる記事と交流を提供します。',
     image: 'https://calmie.jp/cat_icon.png',
     url: 'https://calmie.jp',

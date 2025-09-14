@@ -113,6 +113,27 @@ article img {
   box-shadow: var(--shadow-md);
   display: block;
   object-fit: cover;
+  /* 画像読み込み最適化 */
+  image-rendering: optimizeQuality;
+  /* GPUアクセラレーション */
+  transform: translateZ(0);
+}
+
+/* サムネイル画像の最適化 */
+.thumbnail-image {
+  /* 滑らかな読み込み */
+  transition: opacity 0.3s ease;
+  /* GPUアクセラレーション */
+  will-change: opacity;
+}
+
+.thumbnail-image[loading="lazy"] {
+  /* 遅延読み込み中の透明度 */
+  opacity: 0.9;
+}
+
+.thumbnail-image:not([loading="lazy"]) {
+  opacity: 1;
 }
 
 .article-detail .article-content img {
@@ -245,7 +266,7 @@ article img {
   font-weight: 500;
 }
 
-.edit-button {
+.edit-button, .delete-button {
   background: rgba(255, 255, 255, 0.2);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -721,7 +742,6 @@ a:hover {
   right: 0;
   height: var(--header-height);
   background: #765e5e;
-  border-bottom: 1px solid var(--primary-200);
   z-index: var(--z-fixed);
   padding: 0 var(--spacing-lg);
   align-items: center;
@@ -968,7 +988,7 @@ a:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-xl);
+  padding: var(--spacing-lg);
   background: #765e5e;
   border-bottom: 1px solid #765e5e;
   backdrop-filter: blur(10px);
@@ -1245,21 +1265,11 @@ a:hover {
   font-size: 1.5rem;
   cursor: pointer;
   z-index: var(--z-fixed);
-  transition: all var(--transition-fast);
   box-shadow: var(--shadow-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   border: 3px solid white;
-}
-
-.post-article-button::before {
-  content: '✨';
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  font-size: 1rem;
-  animation: gentle-float 2s ease-in-out infinite;
 }
 
 .post-article-button:hover {
@@ -1300,12 +1310,6 @@ a:hover {
   text-shadow: 0 2px 4px rgba(118, 94, 94, 0.1);
 }
 
-.section-title::before {
-  content: '🌸';
-  font-size: 1.5rem;
-  animation: soft-pulse 2s ease-in-out infinite;
-}
-
 .articles-count {
   font-size: 0.875rem;
   color: var(--gray-600);
@@ -1319,6 +1323,9 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+  /* パフォーマンス改善 */
+  will-change: scroll-position;
+  contain: layout style paint;
 }
 
 /* Empty State */
@@ -1664,16 +1671,6 @@ a:hover {
   font-size: 1rem;
   box-shadow: var(--shadow-md);
   position: relative;
-}
-
-.error-message::before {
-  content: '🌟';
-  position: absolute;
-  top: var(--spacing-md);
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 2rem;
-  animation: gentle-float 3s ease-in-out infinite;
 }
 
 .error-message p {
@@ -3670,8 +3667,11 @@ textarea:focus-visible {
   background: rgba(255, 255, 255, 0.95);
   border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(10px);
+  /* backdrop-filter: blur(10px); パフォーマンス改善のため削除 */
   min-height: 80vh;
+  /* GPUアクセラレーションを有効化 */
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .mypage-loading {
@@ -3742,11 +3742,12 @@ textarea:focus-visible {
   object-fit: cover;
   border: 4px solid white;
   box-shadow: var(--shadow-md);
-  transition: all var(--transition-normal);
+  /* パフォーマンス改善: transition削除 */
+  will-change: transform;
 }
 
 .avatar-image:hover {
-  transform: scale(1.05);
+  /* パフォーマンス改善: scaleを削除 */
   box-shadow: var(--shadow-lg);
 }
 
@@ -4103,4 +4104,187 @@ textarea:focus-visible {
   .empty-icon {
     font-size: 3rem;
   }
+}
+
+/* 検索バー */
+.search-bar {
+  margin-bottom: var(--spacing-md);
+}
+
+.search-input-wrapper {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.search-input {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 2px solid var(--primary-200);
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  background: var(--gray-50);
+  transition: all var(--transition-normal);
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: var(--primary-500);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(var(--primary-500-rgb), 0.1);
+}
+
+.search-input::placeholder {
+  color: var(--gray-500);
+}
+
+.search-button {
+  padding: var(--spacing-sm);
+  background: var(--primary-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+}
+
+.search-button:hover {
+  background: var(--primary-700);
+  transform: translateY(-1px);
+}
+
+/* カテゴリタグ */
+.category-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-md);
+}
+
+.category-tag {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: linear-gradient(135deg, var(--primary-100) 0%, var(--accent-rose-light) 100%);
+  border: 1px solid var(--primary-200);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  color: var(--primary-700);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  white-space: nowrap;
+}
+
+.category-tag:hover {
+  background: linear-gradient(135deg, var(--primary-200) 0%, var(--accent-rose) 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 記事アクション（編集・削除ボタン） */
+.article-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-lg) 0;
+  justify-content: flex-end;
+}
+
+.edit-button,
+.delete-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.edit-button {
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.edit-button:hover {
+  background: linear-gradient(135deg, var(--primary-700) 0%, var(--primary-800) 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.delete-button {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.delete-button:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.edit-button:active,
+.delete-button:active {
+  transform: translateY(0);
+}
+
+/* クリック可能なタイトル */
+.clickable-title,
+.clickable-header {
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  user-select: none;
+}
+
+.clickable-title:hover,
+.clickable-header:hover {
+  opacity: 0.8;
+  transform: translateY(-1px);
+}
+
+.clickable-title:active,
+.clickable-header:active {
+  transform: translateY(0);
+}
+
+/* フローティング投稿ボタン */
+.post-article-button {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--accent-rose) 100%);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: all var(--transition-normal);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.post-article-button:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: var(--shadow-xl);
+}
+
+.post-article-button:active {
+  transform: translateY(-1px) scale(1.02);
+}
+
+@keyframes gentle-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
 }

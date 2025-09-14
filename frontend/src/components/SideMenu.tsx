@@ -1,21 +1,26 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MdAccountCircle } from "react-icons/md";
-import { FaHome, FaTimes, FaNewspaper } from "react-icons/fa";
+import { FaHome, FaTimes, FaNewspaper, FaSearch } from "react-icons/fa";
 import { useAuth } from "../contexts/authContext";
+import AuthModal from "../components/AuthModal";
 
 interface SideMenuProps {
     viewMode?: 'latest' | 'ranking' | 'trend';
     onViewModeChange?: (mode: 'latest' | 'ranking' | 'trend') => void;
+    onSearch?: (query: string) => void;
 }
 
 const SideMenu: React.FC<SideMenuProps> = ({ 
     viewMode = 'latest', 
-    onViewModeChange
+    onViewModeChange,
+    onSearch
 }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const [isOpen, setIsOpen] = useState(window.innerWidth > 1024);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [isAuthModalOpen, setAuthModalOpen] = useState(false);
     const { isAuthenticated } = useAuth();
 
     useEffect(() => {
@@ -52,6 +57,36 @@ const SideMenu: React.FC<SideMenuProps> = ({
         }
     };
 
+    const handleSearch = () => {
+        if (onSearch && searchQuery.trim()) {
+            onSearch(searchQuery);
+        }
+    };
+
+    const handlePostButtonClick = () => {
+        if (isAuthenticated) {
+          navigate("/post-article");
+        } else {
+          setAuthModalOpen(true);
+        }
+    };
+
+    const calmieCategories = [
+        { name: "🐱 猫", query: "猫" },
+        { name: "🐶 犬", query: "犬" },
+        { name: "👶 赤ちゃん", query: "赤ちゃん" },
+        { name: "🐰 うさぎ", query: "うさぎ" },
+        { name: "🐢 亀", query: "亀" },
+        { name: "🐹 ハムスター", query: "ハムスター" },
+    ];
+
+    const handleCategoryClick = (category: string) => {
+        setSearchQuery(category);
+        if (onSearch) {
+            onSearch(category);
+        }
+    };
+
     return (
         <>
             {/* モバイル用オーバーレイ */}
@@ -72,7 +107,17 @@ const SideMenu: React.FC<SideMenuProps> = ({
             
             <nav className={`side-menu ${isOpen ? "open" : "closed"}`} role="navigation">
                 <div className="side-menu-header">
-                    <div className="side-menu-header-content">
+                    <div 
+                        className="side-menu-header-content clickable-header" 
+                        onClick={() => handleNavigation('/')}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                handleNavigation('/');
+                            }
+                        }}
+                    >
                         <h1 className="side-menu-title">calmie</h1>
                         <p className="side-menu-subtitle">カルミー</p>
                     </div>
@@ -87,6 +132,39 @@ const SideMenu: React.FC<SideMenuProps> = ({
                 </div>
                 
                 <div className="side-menu-content">
+                    {/* 検索バー */}
+                    <div className="menu-section">
+                        <h3 className="menu-section-title">🔍 検索</h3>
+                        <div className="search-bar">
+                            <div className="search-input-wrapper">
+                                <input
+                                    className="search-input"
+                                    type="text"
+                                    placeholder="記事を探す"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                />
+                                <button className="search-button" onClick={handleSearch}>
+                                    <FaSearch />
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* カテゴリタグ */}
+                        <div className="category-tags">
+                            {calmieCategories.map((category) => (
+                                <button
+                                    key={category.query}
+                                    className="category-tag"
+                                    onClick={() => handleCategoryClick(category.query)}
+                                >
+                                    {category.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* メインナビゲーション */}
                     <div className="menu-section">
                         <h3 className="menu-section-title">📰 記事</h3>
@@ -100,26 +178,6 @@ const SideMenu: React.FC<SideMenuProps> = ({
                                 </div>
                                 <span className="menu-link-text">新着記事</span>
                             </button>
-{/*                             
-                            <button
-                                className={`menu-link ${viewMode === 'ranking' ? 'active' : ''}`}
-                                onClick={() => handleViewModeChange('ranking')}
-                            >
-                                <div className="menu-link-icon">
-                                    <FaCrown size={18} />
-                                </div>
-                                <span className="menu-link-text">ランキング</span>
-                            </button>
-                            
-                            <button
-                                className={`menu-link ${viewMode === 'trend' ? 'active' : ''}`}
-                                onClick={() => handleViewModeChange('trend')}
-                            >
-                                <div className="menu-link-icon">
-                                    <FaArrowTrendUp size={18} />
-                                </div>
-                                <span className="menu-link-text">トレンド</span>
-                            </button> */}
                         </div>
                     </div>
                     
@@ -141,6 +199,13 @@ const SideMenu: React.FC<SideMenuProps> = ({
                     )}
                 </div>
             </nav>
+
+            {/* 投稿するボタン（フローティング） */}
+            <button className="post-article-button floating-element" onClick={handlePostButtonClick}>
+                ✏️ 
+            </button>
+
+            <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
         </>
     );
 };

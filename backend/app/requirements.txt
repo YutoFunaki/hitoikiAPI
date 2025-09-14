@@ -15,3 +15,5 @@ httpx
 pytest
 pytest-asyncio
 alembic
+Pillow
+ffmpeg-python

@@ -5,16 +5,14 @@ import Articles from "./Articles";
 import ArticleDetail from "./ArticleDetail";
 import Header from "./header";
 import PostArticle from "./PostArticle";
-import RightSidebar from "./RightSidebar";
 import MyPage from "./Mypage";
 import EditArticle from "./EditArticle";
-
-
 
 const Index: React.FC = () => {
     const [viewMode, setViewMode] = useState<'latest' | 'ranking' | 'trend'>('latest');
     const [searchQuery, setSearchQuery] = useState<string>('');
     const navigate = useNavigate();
+    
     // 検索機能の実装
     const handleSearch = (query: string) => {
         setSearchQuery(query);
@@ -33,6 +31,7 @@ const Index: React.FC = () => {
             <SideMenu 
                 viewMode={viewMode}
                 onViewModeChange={handleViewModeChange}
+                onSearch={handleSearch}
             />
             <div className="main-container">
                 <div className="center">
@@ -46,7 +45,6 @@ const Index: React.FC = () => {
                         <Route path="/mypage" element={<MyPage />} />
                     </Routes>
                 </div>
-                <RightSidebar onSearch={handleSearch} />
             </div>
         </div>
     );

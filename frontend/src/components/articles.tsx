@@ -112,16 +112,16 @@ const Articles: React.FC<ArticlesProps> = ({
 
     const getViewModeTitle = () => {
         if (searchQuery && searchQuery.trim()) {
-            return `🔍 検索結果: 「${searchQuery}」`;
+            return `検索結果: 「${searchQuery}」`;
         }
         
         switch (viewMode) {
             case 'ranking':
-                return `🏆 ランキング (${rankingPeriod === 'daily' ? '日次' : rankingPeriod === 'weekly' ? '週次' : '月次'})`;
+                return `ランキング (${rankingPeriod === 'daily' ? '日次' : rankingPeriod === 'weekly' ? '週次' : '月次'})`;
             case 'trend':
-                return `🔥 トレンド (${trendPeriod === 'hourly' ? '1時間' : ''}以内)`;
+                return `トレンド (${trendPeriod === 'hourly' ? '1時間' : ''}以内)`;
             default:
-                return '📰 最新記事';
+                return '最新記事';
         }
     };
 
