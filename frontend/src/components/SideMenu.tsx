@@ -197,6 +197,17 @@ const SideMenu: React.FC<SideMenuProps> = ({
                             </button>
                         </div>
                     )}
+                    
+                    {/* フッターメニュー */}
+                    <div className="menu-section">
+                        <button
+                            className={`menu-link ${isActiveRoute('/privacy-policy') ? 'active' : ''}`}
+                            onClick={() => handleNavigation('/privacy-policy')}
+                            aria-current={isActiveRoute('/privacy-policy') ? 'page' : undefined}
+                        >
+                            <span className="menu-link-text" style={{ fontSize: '0.9rem', opacity: 0.8 }}>プライバシーポリシー</span>
+                        </button>
+                    </div>
                 </div>
             </nav>
 

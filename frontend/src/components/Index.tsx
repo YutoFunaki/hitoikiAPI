@@ -7,6 +7,7 @@ import Header from "./header";
 import PostArticle from "./PostArticle";
 import MyPage from "./Mypage";
 import EditArticle from "./EditArticle";
+import PrivacyPolicy from "./PrivacyPolicy";
 
 const Index: React.FC = () => {
     const [viewMode, setViewMode] = useState<'latest' | 'ranking' | 'trend'>('latest');
@@ -43,6 +44,7 @@ const Index: React.FC = () => {
                         <Route path="/category/:categoryName" element={<Articles viewMode={viewMode} searchQuery={searchQuery} />} />
                         <Route path="/mypage/:userId" element={<MyPage />} />
                         <Route path="/mypage" element={<MyPage />} />
+                        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                     </Routes>
                 </div>
             </div>

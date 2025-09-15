@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# AdSense crawler
+User-agent: Mediapartners-Google
+Allow: /
+
+# Google AdSense
+User-agent: AdsBot-Google
+Allow: /
+
+# Sitemap
+Sitemap: https://calmie.jp/sitemap.xml
+
+# Disallow admin areas
+Disallow: /admin/
+Disallow: /api/admin/ 

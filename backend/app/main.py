@@ -1276,6 +1276,7 @@ def get_mypage(user_id: int, db: Session = Depends(get_db)):
 
 # 🌐 記事専用HTMLページ（OGP対応）
 @app.get("/articles/{article_id}/html")
+@app.head("/articles/{article_id}/html")
 def get_article_html(article_id: int, db: Session = Depends(get_db)):
     """記事詳細のHTMLページを生成（OGP対応）"""
     print(f"🔍 記事HTML生成: article_id={article_id}")
@@ -1357,6 +1358,9 @@ def get_article_html(article_id: int, db: Session = Depends(get_db)):
     <meta name="twitter:image:alt" content="{article.title}" />
     <meta name="twitter:domain" content="calmie.jp" />
     <meta name="twitter:url" content="{get_base_url()}/articles/{article.id}/html" />
+    
+    <!-- Google AdSense -->
+    <meta name="google-adsense-account" content="ca-pub-7328734218185062">
     
     <!-- Additional Meta Tags -->
     <meta name="theme-color" content="#765e5e" />
