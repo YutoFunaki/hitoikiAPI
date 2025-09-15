@@ -224,7 +224,7 @@ const ArticleDetail: React.FC = () => {
                 id: response.data.id,
                 title: response.data.title,
                 content: response.data.content,
-                thumbnail_image: response.data.thumbnail_url
+                thumbnail_image: response.data.thumbnail_url || response.data.thumbnail_image
             });
             updateOGP(ogpData);
             
@@ -469,7 +469,7 @@ const ArticleDetail: React.FC = () => {
 
                         {/* X（旧Twitter） */}
                         <a
-                            href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`https://calmie.jp/api/articles/${article.id}/html`)}&text=${encodeURIComponent(article.title + "\n" + article.content)}`}
+                            href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`https://calmie.jp/api/articles/${article.id}/html`)}&text=${encodeURIComponent(article.title + " #calmie_news\n")}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="share-icon"

@@ -1312,8 +1312,10 @@ def get_article_html(article_id: int, db: Session = Depends(get_db)):
     # サムネイル画像の決定（環境変換適用）
     if article.thumbnail_image:
         thumbnail_url = convert_url_for_environment(article.thumbnail_image)
+        print(f"🖼️  記事サムネイル: {article.thumbnail_image} -> {thumbnail_url}")
     else:
         thumbnail_url = f"{get_base_url()}/static/cat_icon.png"
+        print(f"🐱 デフォルト画像使用: {thumbnail_url}")
     
     # HTMLテンプレートを生成
     html_content = f"""<!doctype html>
@@ -1336,6 +1338,7 @@ def get_article_html(article_id: int, db: Session = Depends(get_db)):
     <meta property="og:description" content="{description}" />
     <meta property="og:url" content="{get_base_url().replace('/api', '')}/articles/{article.id}" />
     <meta property="og:image" content="{thumbnail_url}" />
+    <meta property="og:image:secure_url" content="{thumbnail_url}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="{article.title}" />
@@ -1375,6 +1378,8 @@ def get_article_html(article_id: int, db: Session = Depends(get_db)):
 </html>"""
     
     print(f"✅ 記事HTML生成完了: {article.title}")
+    print(f"🔗 OGP画像URL: {thumbnail_url}")
+    print(f"📝 OGP説明文: {description[:50]}...")
     
     from fastapi.responses import HTMLResponse
     return HTMLResponse(content=html_content)

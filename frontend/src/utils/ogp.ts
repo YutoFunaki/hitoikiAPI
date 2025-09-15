@@ -20,7 +20,12 @@ export const updateOGP = (data: OGPData) => {
   // 画像が提供されている場合
   if (data.image) {
     updateMetaTag('property', 'og:image', data.image);
+    updateMetaTag('property', 'og:image:width', '1200');
+    updateMetaTag('property', 'og:image:height', '630');
+    updateMetaTag('property', 'og:image:type', 'image/jpeg');
     updateMetaTag('name', 'twitter:image', data.image);
+    updateMetaTag('name', 'twitter:image:alt', data.title);
+    updateMetaTag('name', 'twitter:card', 'summary_large_image');
   }
   
   // URLが提供されている場合
