@@ -1386,7 +1386,7 @@ a:hover {
   display: flex;
   gap: var(--spacing-lg);
   padding: var(--spacing-lg);
-  background: #383535;
+  background: #ebcfcf;
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
   transition: all var(--transition-normal);
@@ -2085,8 +2085,8 @@ textarea:focus-visible {
 
 /* Article Cards */
 .article-card {
-  background: #383535;
-  border: 1px solid #574c48;
+  background: #bfa5a5;
+  border: 1px solid #e4bcbc;
   border-radius: var(--radius-2xl);
   padding: var(--spacing-2xl);
   margin-bottom: var(--spacing-2xl);
@@ -2123,7 +2123,7 @@ textarea:focus-visible {
 }
 
 .article-card p {
-  color: var(--gray-600);
+  color: var(--gray-800);
   line-height: 1.6;
   margin-bottom: var(--spacing-lg);
 }
@@ -3545,7 +3545,6 @@ textarea:focus-visible {
 }
 
 .comment-card {
-  background: linear-gradient(135deg, rgba(42, 42, 42, 0.8) 0%, rgba(26, 26, 26, 0.8) 100%);
   border-radius: var(--radius-xl);
   padding: var(--spacing-xl);
   margin-bottom: var(--spacing-lg);
