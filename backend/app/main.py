@@ -1309,8 +1309,11 @@ def get_article_html(article_id: int, db: Session = Depends(get_db)):
     if not description.strip():
         description = "Calmie(カルミー)で投稿された記事をお楽しみください。"
     
-    # サムネイル画像の決定
-    thumbnail_url = article.thumbnail_image if article.thumbnail_image else f"{get_base_url()}/static/cat_icon.png"
+    # サムネイル画像の決定（環境変換適用）
+    if article.thumbnail_image:
+        thumbnail_url = convert_url_for_environment(article.thumbnail_image)
+    else:
+        thumbnail_url = f"{get_base_url()}/static/cat_icon.png"
     
     # HTMLテンプレートを生成
     html_content = f"""<!doctype html>
@@ -1336,6 +1339,7 @@ def get_article_html(article_id: int, db: Session = Depends(get_db)):
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="{article.title}" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:locale" content="ja_JP" />
     <meta property="article:author" content="{author.username if author else 'Calmie Team'}" />
     <meta property="article:published_time" content="{article.public_at.isoformat()}" />
@@ -1348,6 +1352,8 @@ def get_article_html(article_id: int, db: Session = Depends(get_db)):
     <meta name="twitter:description" content="{description}" />
     <meta name="twitter:image" content="{thumbnail_url}" />
     <meta name="twitter:image:alt" content="{article.title}" />
+    <meta name="twitter:domain" content="calmie.jp" />
+    <meta name="twitter:url" content="{get_base_url()}/articles/{article.id}/html" />
     
     <!-- Additional Meta Tags -->
     <meta name="theme-color" content="#765e5e" />
