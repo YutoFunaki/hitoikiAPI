@@ -225,10 +225,17 @@ const EditArticle: React.FC = () => {
       return;
     }
 
+    // セキュリティ改善: ファイル名のみを表示用に使用
+    const urlParts = url.split('/');
+    const fileName = urlParts[urlParts.length - 1];
+    const displayName = fileName.includes('.') ? 
+      `画像_${Date.now()}.${fileName.split('.').pop()}` : 
+      `メディア_${Date.now()}`;
+
     if (type.startsWith("video/")) {
-      setContent((prev) => `${prev}\n<video src="${fullUrl}" controls style="max-width:100%;"></video>\n`);
+      setContent((prev) => `${prev}\n<video src="${fullUrl}" controls style="max-width:100%;" title="${displayName}"></video>\n`);
     } else {
-      setContent((prev) => `${prev}\n![Media](${fullUrl})\n`);
+      setContent((prev) => `${prev}\n![${displayName}](${fullUrl})\n`);
     }
   };
 
@@ -305,7 +312,41 @@ const EditArticle: React.FC = () => {
         />
         {thumbnailFile && (
           <div className="thumbnail-preview">
-            <p>選択されたファイル: {thumbnailFile.name}</p>
+            {thumbnailFile.size > 0 ? (
+              <>
+                <img 
+                  src={URL.createObjectURL(thumbnailFile)} 
+                  alt="サムネイルプレビュー" 
+                  style={{ 
+                    maxWidth: "200px", 
+                    maxHeight: "150px", 
+                    objectFit: "cover",
+                    borderRadius: "8px",
+                    border: "2px solid #ddd"
+                  }} 
+                />
+                <p>📁 {thumbnailFile.name}</p>
+              </>
+            ) : (
+              <>
+                <div 
+                  style={{ 
+                    width: "200px", 
+                    height: "150px", 
+                    backgroundColor: "#f0f0f0",
+                    borderRadius: "8px",
+                    border: "2px solid #ddd",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#666"
+                  }}
+                >
+                  🖼️ 既存のサムネイル
+                </div>
+                <p>📁 現在のサムネイル</p>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -367,28 +408,77 @@ const EditArticle: React.FC = () => {
 
       {mediaFiles.length > 0 && (
         <div className="media-preview">
-          {mediaFiles.map(({ file, url, type }, index) => (
-            <div key={index} className="media-item">
-              {type.startsWith("image/") && (
-                <img 
-                  src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} 
-                  alt={file.name} 
-                  style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} 
-                />
-              )}
-              {type.startsWith("video/") && (
-                <video 
-                  src={url.startsWith("http") ? url : `${API_BASE_URL}${url}`} 
-                  controls 
-                  style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }} 
-                />
-              )}
-              <span>{file.name}</span>
-              <button onClick={() => handleInsertMedia(url, type)}>
-                📝 本文に挿入
-              </button>
-            </div>
-          ))}
+          {mediaFiles.map(({ file, url, type }, index) => {
+            // セキュリティ: URLからファイル名のみを抽出
+            const getSecureFileName = (url: string, originalName: string) => {
+              if (originalName && originalName !== "") return originalName;
+              const urlParts = url.split('/');
+              const fileName = urlParts[urlParts.length - 1];
+              // UUIDを隠してユーザーフレンドリーな名前に変更
+              return fileName.includes('.') ? `media_${index + 1}.${fileName.split('.').pop()}` : `media_${index + 1}`;
+            };
+
+            const secureFileName = getSecureFileName(url, file.name);
+            const displayUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
+
+            return (
+              <div key={index} className="media-item">
+                {type.startsWith("image/") && (
+                  <img 
+                    src={displayUrl} 
+                    alt={secureFileName} 
+                    style={{ 
+                      maxWidth: "120px", 
+                      maxHeight: "120px", 
+                      objectFit: "cover",
+                      borderRadius: "8px",
+                      border: "2px solid #ddd"
+                    }} 
+                    onError={(e) => {
+                      // 画像読み込みエラー時のフォールバック
+                      const target = e.currentTarget as HTMLImageElement;
+                      const nextElement = target.nextElementSibling as HTMLElement;
+                      target.style.display = 'none';
+                      if (nextElement) nextElement.style.display = 'flex';
+                    }}
+                  />
+                )}
+                <div 
+                  style={{ 
+                    width: "120px", 
+                    height: "120px", 
+                    backgroundColor: "#f0f0f0",
+                    borderRadius: "8px",
+                    border: "2px solid #ddd",
+                    display: type.startsWith("image/") ? "none" : "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#666",
+                    fontSize: "2rem"
+                  }}
+                >
+                  {type.startsWith("video/") ? "🎥" : "📁"}
+                </div>
+                {type.startsWith("video/") && (
+                  <video 
+                    src={displayUrl} 
+                    controls 
+                    style={{ 
+                      maxWidth: "120px", 
+                      maxHeight: "120px", 
+                      objectFit: "cover",
+                      borderRadius: "8px",
+                      border: "2px solid #ddd"
+                    }} 
+                  />
+                )}
+                <span className="secure-filename">📎 {secureFileName}</span>
+                <button onClick={() => handleInsertMedia(url, type)}>
+                  📝 本文に挿入
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 

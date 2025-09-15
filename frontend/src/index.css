@@ -2703,11 +2703,35 @@ textarea:focus-visible {
   box-shadow: var(--shadow-xs);
 }
 
-.media-item span {
+.media-item span,
+.secure-filename {
   font-size: 0.75rem;
   color: var(--gray-600);
   text-align: center;
   word-break: break-word;
+  max-width: 140px;
+}
+
+/* サムネイルプレビュー */
+.thumbnail-preview {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-lg);
+  background: var(--gray-50);
+  text-align: center;
+  transition: all var(--transition-normal);
+}
+
+.thumbnail-preview:hover {
+  border-color: var(--primary-400);
+  background: var(--primary-50);
+}
+
+.thumbnail-preview p {
+  margin-top: var(--spacing-sm);
+  font-size: 0.875rem;
+  color: var(--gray-600);
 }
 
 .media-item button {

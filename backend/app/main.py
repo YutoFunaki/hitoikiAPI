@@ -91,8 +91,30 @@ def get_base_url():
     if base_url:
         return base_url
     
-    # 本番環境デフォルト
-    return "https://calmie.jp/api"
+    # Docker環境の検出
+    if os.path.exists('/.dockerenv'):
+        # Dockerコンテナ内の場合は本番環境として扱う
+        return "https://calmie.jp/api"
+    
+    # ローカル開発環境
+    return "http://localhost:8000"
+
+# URL変換関数（既存のlocalhostURLを環境に応じて変換）
+def convert_url_for_environment(url: str) -> str:
+    """既存のURLを現在の環境に応じて変換する"""
+    if not url:
+        return url
+    
+    current_base_url = get_base_url()
+    
+    # localhostのURLを現在の環境のURLに変換
+    if "http://localhost:8000" in url:
+        return url.replace("http://localhost:8000", current_base_url)
+    # 本番URLをローカル環境用に変換（開発時）
+    elif "https://calmie.jp/api" in url and current_base_url == "http://localhost:8000":
+        return url.replace("https://calmie.jp/api", current_base_url)
+    
+    return url
 
 # ディレクトリが存在しない場合は作成
 if not os.path.exists(UPLOAD_DIRECTORY):
@@ -297,7 +319,7 @@ def read_root(db: Session = Depends(get_db)):
             "id": article.id,
             "title": article.title,
             "content": article.content,
-            "thumbnail_url": article.thumbnail_image,
+            "thumbnail_url": convert_url_for_environment(article.thumbnail_image),
             "public_at": article.public_at,
             "like_count": history.like_count if history else 0,
             "access_count": history.access_count if history else 0,
@@ -349,8 +371,8 @@ def get_articles(db: Session = Depends(get_db)):
             "id": article.id,
             "title": article.title,
             "content": article.content,
-            "thumbnail_url": article.thumbnail_image,
-            "thumbnail_image": article.thumbnail_image,  # 両方のフィールド名に対応
+            "thumbnail_url": convert_url_for_environment(article.thumbnail_image),
+            "thumbnail_image": convert_url_for_environment(article.thumbnail_image),  # 両方のフィールド名に対応
             "public_at": article.public_at,
             "like_count": history.like_count,
             "likes_count": history.like_count,  # 複数の命名に対応
@@ -581,7 +603,7 @@ def get_article(id: int, db: Session = Depends(get_db)):
         "id": article.id,
         "title": article.title,
         "content": article.content,
-        "thumbnail_url": article.thumbnail_image,
+        "thumbnail_url": convert_url_for_environment(article.thumbnail_image),
         "like_count": like_count,
         "access_count": access_count,
         "category": article.category,
@@ -590,7 +612,7 @@ def get_article(id: int, db: Session = Depends(get_db)):
         "user": {
             "id": user.id,
             "username": user.username,
-            "user_icon": user.user_icon,
+            "user_icon": convert_url_for_environment(user.user_icon),
             "introduction_text": user.introduction_text,
         },
         "user_articles": user_articles,
@@ -878,19 +900,24 @@ def get_article(article_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
 
+    # メディアファイルのURLも変換
+    content_images = []
+    if article.content_image:
+        content_images = [convert_url_for_environment(url) for url in article.content_image]
+
     return {
         "id": article.id,
         "title": article.title,
         "content": article.content,
         "public_status": article.public_status,
         "categories": article.category,  # ARRAY(String)
-        "content_image": article.content_image or [],  # メディアファイルのリスト
-        "thumbnail_image": article.thumbnail_image,  # サムネイル画像
+        "content_image": content_images,  # メディアファイルのリスト
+        "thumbnail_image": convert_url_for_environment(article.thumbnail_image),  # サムネイル画像
         "user_id": article.create_user_id,
         "user": {
             "id": user.id,
             "username": user.username,
-            "user_icon": user.user_icon,
+            "user_icon": convert_url_for_environment(user.user_icon),
         }
     }
 
@@ -1135,7 +1162,7 @@ def get_mypage(user_id: int, db: Session = Depends(get_db)):
         article_data.append({
             "id": article.id,
             "title": article.title,
-            "thumbnail_url": article.thumbnail_image,
+            "thumbnail_url": convert_url_for_environment(article.thumbnail_image),
             "public_at": article.public_at,
             "like_count": like_count,
             "access_count": access_count,
@@ -1159,7 +1186,7 @@ def get_mypage(user_id: int, db: Session = Depends(get_db)):
         "user": {
             "id": user.id,
             "username": user.username,
-            "user_icon": user.user_icon,
+            "user_icon": convert_url_for_environment(user.user_icon),
             "introduction_text": user.introduction_text,
             "display_name": user.display_name,
             "email": user.email,
@@ -1362,7 +1389,7 @@ def get_user_articles(user_id: int, db: Session = Depends(get_db)):
             article_data.append({
                 "id": article.id,
                 "title": article.title,
-                "thumbnail_url": article.thumbnail_image,
+                "thumbnail_url": convert_url_for_environment(article.thumbnail_image),
                 "public_at": article.public_at,
                 "like_count": history.like_count if history else 0,
                 "access_count": history.access_count if history else 0,
