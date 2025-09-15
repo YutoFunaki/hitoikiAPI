@@ -932,6 +932,7 @@ async def edit_article(
     public_status: str = Form(...),
     update_user_id: int = Form(...),
     files: Optional[List[UploadFile]] = File(None),
+    thumbnail: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     import json
@@ -953,6 +954,56 @@ async def edit_article(
     # メディア保存
     UPLOAD_DIRECTORY = "static"
     os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
+
+    # サムネイル処理
+    if thumbnail and thumbnail.filename:
+        try:
+            # サムネイル画像の処理
+            extension = thumbnail.filename.split(".")[-1].lower()
+            unique_filename = f"{uuid.uuid4()}.{extension}"
+            file_path = os.path.join(UPLOAD_DIRECTORY, unique_filename)
+            
+            # PIL を使用してサムネイル画像を処理
+            from PIL import Image
+            import io
+            
+            # 画像を読み込み
+            image_data = await thumbnail.read()
+            image = Image.open(io.BytesIO(image_data))
+            
+            # EXIF 情報に基づいて画像を回転
+            from PIL import ImageOps
+            if hasattr(image, '_getexif') and image._getexif() is not None:
+                image = ImageOps.exif_transpose(image)
+            
+            # RGB モードに変換（RGBA や P モードの場合）
+            if image.mode in ('RGBA', 'P'):
+                image = image.convert('RGB')
+            
+            # サムネイル用にリサイズ（最大400x400）
+            image.thumbnail((400, 400), Image.Resampling.LANCZOS)
+            
+            # 品質を下げて保存（60%品質）
+            image.save(file_path, format='JPEG', quality=60, optimize=True)
+            
+            # 環境に応じたURLを生成
+            base_url = get_base_url()
+            thumbnail_url = f"{base_url}/static/{unique_filename}"
+            
+            article.thumbnail_url = thumbnail_url
+            article.thumbnail_image = thumbnail_url
+            
+        except Exception as e:
+            print(f"サムネイル処理エラー: {e}")
+            # エラーが発生した場合は元のファイルをそのまま保存
+            with open(file_path, "wb") as buffer:
+                await thumbnail.seek(0)
+                shutil.copyfileobj(thumbnail.file, buffer)
+            
+            base_url = get_base_url()
+            thumbnail_url = f"{base_url}/static/{unique_filename}"
+            article.thumbnail_url = thumbnail_url
+            article.thumbnail_image = thumbnail_url
 
     if files:
         saved_paths = []
