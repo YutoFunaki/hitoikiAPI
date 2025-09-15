@@ -79,7 +79,7 @@ def get_db():
         db.close()
 
 app = FastAPI()
-UPLOAD_DIRECTORY = "./uploads"
+UPLOAD_DIRECTORY = "./static"
 MAX_FILE_SIZE_MB = 100  # 100MBまで許可（大きめに）
 MAX_IMAGE_WIDTH = 1280  # 画像の最大幅を制限
 ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "mp4", "mov", "avi", "webm"]  # .mov を許可
@@ -120,7 +120,10 @@ def convert_url_for_environment(url: str) -> str:
 if not os.path.exists(UPLOAD_DIRECTORY):
     os.makedirs(UPLOAD_DIRECTORY)
 
-app.mount("/static", StaticFiles(directory="uploads"), name="static")
+# staticディレクトリの絶対パスを確認
+print(f"📁 UPLOAD_DIRECTORY: {os.path.abspath(UPLOAD_DIRECTORY)}")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS設定を追加
 origins = [
@@ -951,8 +954,7 @@ async def edit_article(
     parsed_categories = json.loads(categories)
     article.category = [str(cat_id) for cat_id in parsed_categories]
 
-    # メディア保存
-    UPLOAD_DIRECTORY = "static"
+    # メディア保存（グローバル定数を使用）
     os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
 
     # サムネイル処理
@@ -996,28 +998,51 @@ async def edit_article(
         except Exception as e:
             print(f"サムネイル処理エラー: {e}")
             # エラーが発生した場合は元のファイルをそのまま保存
-            with open(file_path, "wb") as buffer:
+            try:
                 await thumbnail.seek(0)
-                shutil.copyfileobj(thumbnail.file, buffer)
-            
-            base_url = get_base_url()
-            thumbnail_url = f"{base_url}/static/{unique_filename}"
-            article.thumbnail_url = thumbnail_url
-            article.thumbnail_image = thumbnail_url
+                thumbnail_content = await thumbnail.read()
+                with open(file_path, "wb") as buffer:
+                    buffer.write(thumbnail_content)
+                
+                base_url = get_base_url()
+                thumbnail_url = f"{base_url}/static/{unique_filename}"
+                article.thumbnail_url = thumbnail_url
+                article.thumbnail_image = thumbnail_url
+            except Exception as fallback_error:
+                print(f"サムネイルフォールバック処理エラー: {fallback_error}")
+                # 完全に失敗した場合はサムネイルを更新しない
+                pass
 
     if files:
         saved_paths = []
         for file in files:
-            extension = file.filename.split(".")[-1].lower()
-            unique_filename = f"{uuid.uuid4()}.{extension}"
-            file_path = os.path.join(UPLOAD_DIRECTORY, unique_filename)
+            if file.filename:  # ファイル名が存在することを確認
+                extension = file.filename.split(".")[-1].lower()
+                unique_filename = f"{uuid.uuid4()}.{extension}"
+                file_path = os.path.join(UPLOAD_DIRECTORY, unique_filename)
 
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+                try:
+                    # 非同期でファイル内容を読み込み
+                    file_content = await file.read()
+                    
+                    # ファイルサイズをチェック
+                    if len(file_content) > 0:
+                        # 非同期でファイルを保存
+                        async with aiofiles.open(file_path, "wb") as buffer:
+                            await buffer.write(file_content)
 
-            saved_paths.append(f"/static/{unique_filename}")
+                        # 環境に応じた完全URLを生成（post-articleと同じ形式）
+                        base_url = get_base_url()
+                        saved_paths.append(f"{base_url}/static/{unique_filename}")
+                        print(f"✅ ファイル保存成功: {file_path} ({len(file_content)} bytes)")
+                    else:
+                        print(f"⚠️ 空のファイルをスキップ: {file.filename}")
+                        
+                except Exception as file_error:
+                    print(f"❌ ファイル保存エラー: {file.filename} - {file_error}")
         
-        article.content_image = saved_paths
+        if saved_paths:  # 保存されたファイルがある場合のみ更新
+            article.content_image = saved_paths
 
     db.commit()
     db.refresh(article)
