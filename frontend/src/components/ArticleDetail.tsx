@@ -469,7 +469,7 @@ const ArticleDetail: React.FC = () => {
 
                         {/* X（旧Twitter） */}
                         <a
-                            href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`https://calmie.jp/api/articles/${article.id}/html`)}&text=${encodeURIComponent(article.title + " #calmie_news\n")}`}
+                            href={`https://x.com/intent/tweet?text=${encodeURIComponent(article.title + "\n#calmie_news\n" + `https://calmie.jp/articles/${article.id}`)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="share-icon"

@@ -1364,15 +1364,22 @@ def get_article_html(article_id: int, db: Session = Depends(get_db)):
     
     <!-- リダイレクト用JavaScript -->
     <script>
-        // SPAにリダイレクト
-        window.location.href = '{get_base_url().replace('/api', '')}/articles/{article.id}';
+        // OGPクローラー用に少し待機してからSPAにリダイレクト
+        setTimeout(function() {{
+            window.location.href = '{get_base_url().replace('/api', '')}/articles/{article.id}';
+        }}, 1000);
     </script>
+    
+    <!-- 即座にリダイレクトしたい場合のmetaタグ -->
+    <meta http-equiv="refresh" content="2;url={get_base_url().replace('/api', '')}/articles/{article.id}">
 </head>
 <body>
     <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
         <h1>{article.title}</h1>
+        {f'<img src="{thumbnail_url}" alt="{article.title}" style="max-width: 600px; height: auto; margin: 20px auto; display: block;">' if article.thumbnail_image else ''}
+        <p>{description}</p>
         <p>リダイレクト中...</p>
-        <p><a href="{get_base_url().replace('/api', '')}/articles/{article.id}">記事を読む</a></p>
+        <p><a href="{get_base_url().replace('/api', '')}/articles/{article.id}" style="color: #3b82f6; text-decoration: none;">📖 記事を読む</a></p>
     </div>
 </body>
 </html>"""
