@@ -23,7 +23,17 @@ else
 fi
 
 # コンテナを停止
-docker-compose -f $COMPOSE_FILE down
+# Docker Compose V2を優先的に使用、フォールバックでV1を使用
+if command -v "docker" >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v "docker-compose" >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo "❌ Docker Composeが見つかりません。インストールしてください。"
+    exit 1
+fi
+
+$DOCKER_COMPOSE -f $COMPOSE_FILE down
 
 if [ $? -eq 0 ]; then
     echo "✅ Calmie サービスが正常に停止しました！"

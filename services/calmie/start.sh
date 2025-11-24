@@ -24,7 +24,19 @@ fi
 
 # Dockerイメージをビルドして起動
 echo "🔨 Dockerイメージをビルドしています..."
-docker-compose -f $COMPOSE_FILE build
+
+# Docker Compose V2を優先的に使用、フォールバックでV1を使用
+if command -v "docker" >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v "docker-compose" >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo "❌ Docker Composeが見つかりません。インストールしてください。"
+    exit 1
+fi
+
+echo "📋 使用するDocker Composeコマンド: $DOCKER_COMPOSE"
+$DOCKER_COMPOSE -f $COMPOSE_FILE build
 
 if [ $? -ne 0 ]; then
     echo "❌ Dockerイメージのビルドに失敗しました"
@@ -32,7 +44,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "🔄 コンテナを起動しています..."
-docker-compose -f $COMPOSE_FILE up -d
+$DOCKER_COMPOSE -f $COMPOSE_FILE up -d
 
 if [ $? -eq 0 ]; then
     echo "✅ Calmie サービスが正常に起動しました！"
@@ -50,10 +62,10 @@ if [ $? -eq 0 ]; then
     echo "       パスワード: admin"
     echo ""
     echo "🔍 コンテナの状態を確認:"
-    docker-compose -f $COMPOSE_FILE ps
+    $DOCKER_COMPOSE -f $COMPOSE_FILE ps
     echo ""
     echo "📄 ログを確認:"
-    echo "   docker-compose -f $COMPOSE_FILE logs -f"
+    echo "   $DOCKER_COMPOSE -f $COMPOSE_FILE logs -f"
     echo ""
     echo "🛑 停止する場合:"
     echo "   ./stop.sh"
