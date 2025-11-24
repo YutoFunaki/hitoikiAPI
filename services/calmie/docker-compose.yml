@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  # Calmieバックエンド
+  calmie-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: calmie-backend
+    ports:
+      - "8001:8000"  # 外部:8001, 内部:8000
+    depends_on:
+      - postgres
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+      - ./backend/static:/app/static
+      - ./backend/media:/app/media
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/postgres
+      - PYTHONPATH=/app/app
+    networks:
+      - calmie-network
+    restart: unless-stopped
+
+  # Calmieフロントエンド
+  calmie-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: calmie-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - calmie-backend
+    networks:
+      - calmie-network
+    restart: unless-stopped
+
+  # PostgreSQLデータベース
+  postgres:
+    image: postgres:15-alpine
+    container_name: calmie-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - calmie-network
+    restart: unless-stopped
+
+  # pgAdmin（データベース管理用、オプショナル）
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: calmie-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@calmie.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+    networks:
+      - calmie-network
+    restart: unless-stopped
+
+networks:
+  calmie-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

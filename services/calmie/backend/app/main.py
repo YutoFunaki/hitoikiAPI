@@ -110,8 +110,10 @@ def convert_url_for_environment(url: str) -> str:
     # localhostのURLを現在の環境のURLに変換
     if "http://localhost:8000" in url:
         return url.replace("http://localhost:8000", current_base_url)
-    # 本番URLをローカル環境用に変換（開発時）
-    elif "https://calmie.jp/api" in url and current_base_url == "http://localhost:8000":
+    elif "http://localhost:8001" in url:
+        return url.replace("http://localhost:8001", current_base_url)
+    # 本番URLを開発環境用に変換（開発時）
+    elif "https://calmie.jp/api" in url:
         return url.replace("https://calmie.jp/api", current_base_url)
     
     return url
@@ -127,8 +129,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS設定を追加
 origins = [
-    "http://localhost:5173",  # フロントエンドのURL
+    "http://localhost:3001",  # Docker開発環境のフロントエンドURL
+    "http://localhost:5173",  # Vite開発サーバーのURL
+    "http://127.0.0.1:3001", 
     "http://127.0.0.1:5173",
+    "http://localhost:3000",  # 予備ポート
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -207,13 +212,23 @@ class OAuthLoginRequest(BaseModel):
 @app.post("/oauth-login")
 def oauth_login(request: OAuthLoginRequest, db: Session = Depends(get_db)):
     try:
-        decoded_token = auth.verify_id_token(request.id_token)
+        # Firebase認証が利用可能かチェック
+        if not firebase.is_firebase_available():
+            raise HTTPException(
+                status_code=500, 
+                detail="Firebase authentication is not properly configured. Please check server logs."
+            )
+        
+        # Firebase IDトークンを検証
+        decoded_token = firebase.firebase_auth.verify_id_token(request.id_token)
         email = decoded_token.get("email")
         uid = decoded_token.get("uid")
+        name = decoded_token.get("name", email.split("@")[0] if email else "User")
 
         if not email or not uid:
             raise HTTPException(status_code=400, detail="Invalid OAuth token")
 
+        # 既存ユーザーをFirebase UIDで検索
         db_user = db.query(User).filter(User.firebase_user_id == uid).first()
 
         if not db_user:
@@ -224,7 +239,7 @@ def oauth_login(request: OAuthLoginRequest, db: Session = Depends(get_db)):
             new_user = User(
                 username=email.split("@")[0],
                 firebase_user_id=uid,
-                display_name=email.split("@")[0],
+                display_name=name,
                 email=email,
                 password_hash=None,
                 points=0,
@@ -236,7 +251,8 @@ def oauth_login(request: OAuthLoginRequest, db: Session = Depends(get_db)):
             db.refresh(new_user)
             db_user = new_user
 
-        token = auth.create_custom_token(uid)
+        # カスタムトークンを作成
+        token = firebase.firebase_auth.create_custom_token(uid)
 
         return {
             "token": token,
@@ -1599,7 +1615,7 @@ def search_articles(query: str, db: Session = Depends(get_db)):
             User, Article.create_user_id == User.id
         ).filter(
             Article.deleted_at.is_(None),
-            Article.public_status == PublicStatus.public,
+            Article.public_status == models.PublicStatus.public,
             (Article.content.ilike(f"%{query}%") |
              Article.title.ilike(f"%{query}%") |
              Article.category.any(query))

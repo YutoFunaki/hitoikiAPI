@@ -1,58 +1,63 @@
 import os
-from firebase_admin import credentials, initialize_app, _apps
+from firebase_admin import credentials, initialize_app, _apps, auth
 from dotenv import load_dotenv
 
-# .env を読み込む
-load_dotenv(dotenv_path=".env.production")
+# .env を読み込む（存在する場合のみ）
+if os.path.exists(".env.production"):
+    load_dotenv(dotenv_path=".env.production")
+elif os.path.exists(".env"):
+    load_dotenv(dotenv_path=".env")
 
-# Docker環境とローカル環境の両方をサポートするパス設定
+# Firebase認証ファイルのパス検索
 def get_firebase_cred_path():
-    # 試行するパスのリスト
     candidate_paths = [
         # 環境変数から取得
         os.getenv("FIREBASE_CREDENTIAL_PATH"),
-        # Docker環境のパス（WORKDIR /app から）
-        "/app/app/firebase/hitoiki-app-firebase-adminsdk-xn0xn-bf68272980.json",
-        # ローカル環境のパス（相対パス）
-        "./app/firebase/hitoiki-app-firebase-adminsdk-xn0xn-bf68272980.json",
-        # 絶対パスでも試行
-        os.path.join(os.path.dirname(__file__), "firebase", "hitoiki-app-firebase-adminsdk-xn0xn-bf68272980.json")
+        # Docker環境のパス
+        "/app/app/firebase/hitoiki-app-firebase-adminsdk-xn0xn-b53b0762f9.json",
+        # ローカル環境のパス
+        "./app/firebase/hitoiki-app-firebase-adminsdk-xn0xn-b53b0762f9.json",
+        # 絶対パス
+        os.path.join(os.path.dirname(__file__), "firebase", "hitoiki-app-firebase-adminsdk-xn0xn-b53b0762f9.json")
     ]
     
-    # 存在するパスを順番に確認
     for path in candidate_paths:
         if path and os.path.exists(path):
             print(f"✅ Firebase credential file found: {path}")
             return path
     
-    print(f"❌ Firebase credential file not found in any of these paths:")
-    for path in candidate_paths:
+    print("❌ Firebase credential file not found.")
+    print("📋 Expected locations:")
+    for i, path in enumerate(candidate_paths, 1):
         if path:
-            print(f"  - {path} (exists: {os.path.exists(path)})")
+            exists_status = "✅ EXISTS" if os.path.exists(path) else "❌ NOT FOUND"
+            print(f"  {i}. {path} - {exists_status}")
     
     return None
 
 firebase_cred_path = get_firebase_cred_path()
 
-# 初期化（ファイルが存在しない場合はスキップ）
+# Firebase初期化
+firebase_app = None
+firebase_auth = None
+
 if not _apps:
     try:
-        if firebase_cred_path and os.path.exists(firebase_cred_path):
+        if firebase_cred_path:
             cred = credentials.Certificate(firebase_cred_path)
-            initialize_app(cred)
-            print("✅ Firebase initialized successfully")
+            firebase_app = initialize_app(cred)
+            firebase_auth = auth
+            print("✅ Firebase Admin SDK initialized successfully")
         else:
-            print("⚠️ Firebase credential file not found. Running without Firebase authentication.")
-            print(f"Expected path: {firebase_cred_path}")
-            print(f"Current working directory: {os.getcwd()}")
-            print(f"File exists check: {os.path.exists(firebase_cred_path)}")
-            # Firebase無しでも動作するようにダミーの初期化
-            initialize_app(options={'projectId': 'hitoiki-app'})
+            print("⚠️  Firebase credential file not found. Authentication will be disabled.")
+            # 開発用の最小設定
+            firebase_app = initialize_app(options={'projectId': 'hitoiki-app'})
+            print("⚠️  Running in development mode without authentication")
     except Exception as e:
         print(f"❌ Firebase initialization failed: {e}")
-        print("🔄 Running without Firebase authentication.")
-        # エラーが発生してもアプリケーションを継続
-        try:
-            initialize_app(options={'projectId': 'hitoiki-app'})
-        except:
-            pass
+        firebase_app = None
+        firebase_auth = None
+
+def is_firebase_available():
+    """Firebase認証が利用可能かチェック"""
+    return firebase_auth is not None and firebase_cred_path is not None

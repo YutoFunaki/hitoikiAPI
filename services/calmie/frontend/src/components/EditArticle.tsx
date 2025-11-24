@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import ReactMde from "react-mde";
-import Showdown from "showdown";
-import "react-mde/lib/styles/css/react-mde-all.css";
+import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-md-editor/markdown-editor.css';
 import axios from "axios";
 import { API_BASE_URL } from '../config/api';
 import { useAuth } from "../contexts/authContext";
@@ -21,7 +20,6 @@ const EditArticle: React.FC = () => {
   const [content, setContent] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [categoryInput, setCategoryInput] = useState("");
-  const [selectedTab, setSelectedTab] = useState<"write" | "preview">("write");
   const [mediaFiles, setMediaFiles] = useState<{ file: File; url: string; type: string }[]>([]);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -239,25 +237,6 @@ const EditArticle: React.FC = () => {
     }
   };
 
-  const converter = new Showdown.Converter({
-    tables: true,
-    simplifiedAutoLink: true,
-    strikethrough: true,
-    tasklists: true,
-  });
-
-  converter.addExtension({
-    type: "output",
-    regex: /<img src="(.*?)" alt="(.*?)"(.*?)>/g,
-    replace: '<img src="$1" alt="$2" style="max-width:100%; max-height:300px; display:block; margin:10px auto;" $3 />'
-  }, "imageResizer");
-
-  converter.addExtension({
-    type: "output",
-    regex: /<video src="(.*?)"(.*?)>/g,
-    replace: '<video src="$1" $2 style="max-width:100%; max-height:300px; display:block; margin:10px auto;"></video>'
-  }, "videoResizer");
-
   // 初期ローディング状態
   if (initialLoading) {
     return (
@@ -372,14 +351,11 @@ const EditArticle: React.FC = () => {
 
       <div className="form-group">
         <label>✍️ 本文</label>
-        <ReactMde
+        <MDEditor
           value={content}
-          onChange={setContent}
-          selectedTab={selectedTab}
-          onTabChange={setSelectedTab}
-          generateMarkdownPreview={(markdown) =>
-            Promise.resolve(`<div class="react-mde-preview">${converter.makeHtml(markdown)}</div>`)
-          }
+          onChange={(value) => setContent(value || "")}
+          data-color-mode="light"
+          height={400}
         />
       </div>
 

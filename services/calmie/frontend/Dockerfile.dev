@@ -1,0 +1,50 @@
+# マルチステージビルド：開発環境
+FROM node:18-alpine as development
+
+# 作業ディレクトリを設定
+WORKDIR /app
+
+# package.jsonとpackage-lock.jsonをコピー
+COPY package*.json ./
+
+# 依存関係をインストール（legacy-peer-depsフラグを使用）
+RUN npm install --legacy-peer-deps
+
+# アプリケーションコードをコピー
+COPY . .
+
+# Docker開発環境用の環境変数をコピー
+COPY .env.docker .env
+
+# ポート3000を公開
+EXPOSE 3000
+
+# 開発サーバーを起動
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+# プロダクション用ビルド
+FROM development as build
+
+# アプリケーションをビルド
+RUN npm run build
+
+# Nginxでサーブ
+FROM nginx:alpine as production
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# nginx設定ファイルをコピー（SPAルーティング対応）
+RUN echo 'server { \
+    listen 80; \
+    server_name localhost; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+    # gzip圧縮を有効化 \
+    gzip on; \
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript; \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

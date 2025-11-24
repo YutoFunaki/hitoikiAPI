@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  # Calmieバックエンド（開発版）
+  calmie-backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: calmie-backend-dev
+    ports:
+      - "8001:8000"  # 外部:8001, 内部:8000
+    depends_on:
+      - postgres-dev
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+      - ./backend/static:/app/static
+      - ./backend/media:/app/media
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres-dev:5432/postgres
+      - PYTHONPATH=/app/app
+      - API_BASE_URL=http://localhost:8001
+    networks:
+      - calmie-dev-network
+    restart: unless-stopped
+
+  # Calmieフロントエンド（開発版）
+  calmie-frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: calmie-frontend-dev
+    ports:
+      - "3001:3000"  # 外部:3001, 内部:3000
+    depends_on:
+      - calmie-backend-dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8001
+    networks:
+      - calmie-dev-network
+    restart: unless-stopped
+
+  # PostgreSQLデータベース（開発版）
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: calmie-postgres-dev
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - calmie-dev-network
+    restart: unless-stopped
+
+networks:
+  calmie-dev-network:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+    driver: local

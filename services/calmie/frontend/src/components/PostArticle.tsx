@@ -1,7 +1,5 @@
 import React, { useState, useRef } from "react";
-import ReactMde from "react-mde";
-import Showdown from "showdown";
-import "react-mde/lib/styles/css/react-mde-all.css";
+import MDEditor from "@uiw/react-md-editor";
 import { useAuth } from "../contexts/authContext";
 import { API_BASE_URL } from '../config/api';
 
@@ -11,7 +9,6 @@ const PostArticle: React.FC = () => {
     const [categoryInput, setCategoryInput] = useState("");
     const [content, setContent] = useState("");
     const [mediaFiles, setMediaFiles] = useState<{ file: File, url: string, type: string }[]>([]);
-    const [selectedTab, setSelectedTab] = useState<"write" | "preview">("write");
     const [uploading, setUploading] = useState<boolean>(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { user, isAuthenticated } = useAuth();
@@ -127,38 +124,6 @@ const PostArticle: React.FC = () => {
         }
     };
 
-    const converter = new Showdown.Converter({
-        tables: true,
-        simplifiedAutoLink: true,
-        strikethrough: true,
-        tasklists: true,
-        ghCompatibleHeaderId: true,
-        simpleLineBreaks: false,
-        requireSpaceBeforeHeadingText: true,
-        literalMidWordUnderscores: true,
-        smoothLivePreview: true,
-        emoji: true,
-        underline: true,
-        openLinksInNewWindow: true,
-        backslashEscapesHTMLTags: true,
-        disableForced4SpacesIndentedSublists: true,
-        ghCodeBlocks: true,
-        smartIndentationFix: true,
-        breaks: true,
-    });
-
-    converter.addExtension({
-        type: "output",
-        regex: /<img src="(.*?)" alt="(.*?)"(.*?)>/g,
-        replace: '<img src="$1" alt="$2" style="max-width:100%; max-height:300px; display:block; margin:10px auto;" $3 />'
-    }, "imageResizer");
-
-    converter.addExtension({
-        type: "output",
-        regex: /<video src="(.*?)"(.*?)>/g,
-        replace: '<video src="$1" $2 style="max-width:100%; max-height:300px; display:block; margin:10px auto;"></video>'
-    }, "videoResizer");
-
     return (
         <div className="post-article-page">
             <h1>📝 記事を投稿する</h1>
@@ -212,14 +177,12 @@ const PostArticle: React.FC = () => {
 
             <div className="form-group">
                 <label>✍️ 本文</label>
-                <ReactMde
+                <MDEditor
                     value={content}
-                    onChange={setContent}
-                    selectedTab={selectedTab}
-                    onTabChange={setSelectedTab}
-                    generateMarkdownPreview={(markdown) =>
-                        Promise.resolve(`<div class="react-mde-preview">${converter.makeHtml(markdown)}</div>`)
-                    }
+                    onChange={(val) => setContent(val || "")}
+                    preview="edit"
+                    hideToolbar
+                    visibleDragBar={false}
                 />
             </div>
 

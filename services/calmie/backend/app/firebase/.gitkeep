@@ -1,0 +1,5 @@
+# このディレクトリにFirebaseの認証ファイルを配置してください
+# hitoiki-app-firebase-adminsdk-xn0xn-bf68272980.json
+
+# セキュリティのため、実際の認証ファイルは.gitignoreに含めて
+# Gitリポジトリにコミットしないようにしてください
