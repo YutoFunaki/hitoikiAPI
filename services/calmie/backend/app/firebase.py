@@ -10,6 +10,28 @@ elif os.path.exists(".env"):
 
 # Firebase認証ファイルのパス検索
 def get_firebase_cred_path():
+    # 環境変数からbase64エンコードされた認証情報を取得
+    service_account_key = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
+    if service_account_key:
+        try:
+            import base64
+            import tempfile
+            import json
+            
+            # base64デコード
+            decoded_key = base64.b64decode(service_account_key)
+            key_data = json.loads(decoded_key)
+            
+            # 一時ファイルに保存
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+            json.dump(key_data, temp_file)
+            temp_file.close()
+            
+            print(f"✅ Firebase credential loaded from environment variable")
+            return temp_file.name
+        except Exception as e:
+            print(f"❌ Failed to load Firebase credential from environment variable: {e}")
+    
     candidate_paths = [
         # 環境変数から取得
         os.getenv("FIREBASE_CREDENTIAL_PATH"),
