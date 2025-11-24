@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import DOMPurify from "dompurify";
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import Showdown from "showdown";
 import { API_BASE_URL } from '../config/api';
-import { updateOGP, resetOGP, generateArticleOGP } from '../utils/ogp';
- 
-import { useAuth } from "../contexts/authContext";
-import AuthModal from "../components/AuthModal";
-import XLogo from "../assets/x-logo-black.png";
+import { generateArticleOGP, resetOGP, updateOGP } from '../utils/ogp';
+
 import ThreadsLogo from "../assets/threads-logo-black.svg";
+import XLogo from "../assets/x-logo-black.png";
+import AuthModal from "../components/AuthModal";
+import { useAuth } from "../contexts/authContext";
 
 interface Comment {
     id: number;
@@ -56,12 +56,12 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
 
     const handleCommentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!isAuthenticated || !user?.id) {
             onAuthRequired();
             return;
         }
-        
+
         if (!comment.trim()) {
             setError("コメントを入力してください");
             return;
@@ -71,16 +71,16 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
             setError("コメントは500文字以内で入力してください");
             return;
         }
-    
+
         try {
             setIsSubmitting(true);
             setError("");
-            
+
             const response = await axios.post(`${API_BASE_URL}/articles/${articleId}/comments`, {
                 user_id: user.id,
                 comment: comment.trim(),
             });
-            
+
             console.log("コメント投稿成功:", response.data);
             setComment("");
             onCommentPosted(); // 投稿後に親コンポーネントのリロード
@@ -90,20 +90,20 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
         } finally {
             setIsSubmitting(false);
         }
-    };    
+    };
 
     return (
         <div className="comment-form-container">
             <div className="comment-form-header">
                 <h3 className="comment-form-title">💬 コメントを投稿する</h3>
                 <p className="comment-form-subtitle">
-                    {isAuthenticated ? 
-                        `${user?.username || 'あなた'}としてコメントを投稿` : 
+                    {isAuthenticated ?
+                        `${user?.username || 'あなた'}としてコメントを投稿` :
                         'ログインしてコメントを投稿しましょう'
                     }
                 </p>
             </div>
-            
+
             <form onSubmit={handleCommentSubmit} className="comment-form">
                 <div className="comment-input-container">
                     <textarea
@@ -126,25 +126,25 @@ const CommentForm: React.FC<{ articleId: number; onCommentPosted: () => void; on
                         )}
                     </div>
                 </div>
-                
+
                 {error && (
                     <div className="comment-error">
                         <span className="error-icon">⚠️</span>
                         {error}
                     </div>
                 )}
-                
+
                 <div className="comment-form-actions">
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         className="comment-cancel-button"
                         onClick={() => setComment("")}
                         disabled={!comment || isSubmitting}
                     >
                         クリア
                     </button>
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         className="comment-submit-button"
                         disabled={!isAuthenticated || !comment.trim() || isSubmitting}
                     >
@@ -195,22 +195,22 @@ const ArticleDetail: React.FC = () => {
         ghCodeBlocks: true,
         smartIndentationFix: true,
     });
-    
+
     const truncateText = (text: string, maxLength: number) => {
         return text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
     };
-    
+
     converter.addExtension({
         type: "output",
         regex: /<img src="(.*?)" alt="(.*?)"(.*?)>/g,
         replace: '<img src="$1" alt="$2" style="max-width:100%; max-height:300px; display:block; margin:10px auto;" $3 />'
     }, "imageResizer");
-    
+
     converter.addExtension({
         type: "output",
         regex: /<video src="(.*?)"(.*?)>/g,
         replace: '<video src="$1" $2 style="max-width:100%; max-height:300px; display:block; margin:10px auto;"></video>'
-    }, "videoResizer");    
+    }, "videoResizer");
 
 
     const fetchArticle = async () => {
@@ -218,7 +218,7 @@ const ArticleDetail: React.FC = () => {
         try {
             const response = await axios.get(`${API_BASE_URL}/articles/${id}`);
             setArticle(response.data);
-            
+
             // 🎯 OGPメタタグを記事固有の内容に更新
             const ogpData = generateArticleOGP({
                 id: response.data.id,
@@ -227,7 +227,7 @@ const ArticleDetail: React.FC = () => {
                 thumbnail_image: response.data.thumbnail_url || response.data.thumbnail_image
             });
             updateOGP(ogpData);
-            
+
         } catch (err: any) {
             console.error("Failed to fetch data:", err);
             setError("記事の取得に失敗しました");
@@ -238,7 +238,7 @@ const ArticleDetail: React.FC = () => {
 
     useEffect(() => {
         fetchArticle();
-        
+
         // 🔄 コンポーネント破棄時にOGPをデフォルトに戻す
         return () => {
             resetOGP();
@@ -281,14 +281,14 @@ const ArticleDetail: React.FC = () => {
 
     const handleDelete = async () => {
         if (!article) return;
-        
+
         // 削除確認ダイアログ
         const confirmDelete = window.confirm(
             `「${article.title}」を本当に削除しますか？\n\nこの操作は取り消せません。`
         );
-        
+
         if (!confirmDelete) return;
-        
+
         try {
             await axios.delete(`${API_BASE_URL}/articles/${article.id}`);
             alert("記事が削除されました");
@@ -310,18 +310,18 @@ const ArticleDetail: React.FC = () => {
             if (likeButton) {
                 // 連続クリック防止
                 likeButton.style.pointerEvents = "none";
-                
+
                 // 特別感のあるアニメーション
                 likeButton.classList.add("liked");
-                
+
                 // ハートエフェクトを作成
                 createHeartEffect(likeButton);
-                
+
                 // 振動効果（対応ブラウザのみ）
                 if (navigator.vibrate) {
                     navigator.vibrate([100, 50, 100]);
                 }
-                
+
                 setTimeout(() => {
                     likeButton.classList.remove("liked");
                     likeButton.style.pointerEvents = "auto";
@@ -344,7 +344,7 @@ const ArticleDetail: React.FC = () => {
     const createHeartEffect = (button: HTMLElement) => {
         const hearts = ['❤️', '💖', '💕', '💗', '💝'];
         const heartCount = 5;
-        
+
         for (let i = 0; i < heartCount; i++) {
             const heart = document.createElement('div');
             heart.textContent = hearts[Math.floor(Math.random() * hearts.length)];
@@ -357,16 +357,16 @@ const ArticleDetail: React.FC = () => {
                 left: ${button.offsetLeft + Math.random() * button.offsetWidth}px;
                 top: ${button.offsetTop}px;
             `;
-            
+
             // ランダムな方向に飛ばす
             const randomX = (Math.random() - 0.5) * 200;
             const randomY = -100 - Math.random() * 100;
-            
+
             heart.style.setProperty('--random-x', `${randomX}px`);
             heart.style.setProperty('--random-y', `${randomY}px`);
-            
+
             button.parentElement?.appendChild(heart);
-            
+
             // アニメーション終了後に要素を削除
             setTimeout(() => {
                 heart.remove();
@@ -401,7 +401,7 @@ const ArticleDetail: React.FC = () => {
         ALLOWED_TAGS: [
             "h1", "h2", "h3", "h4", "h5", "h6", "p", "br",
             "strong", "b", "em", "i", "del", "strike", "code",
-            "blockquote", "pre", "ul", "ol", "li", "a", "img", 
+            "blockquote", "pre", "ul", "ol", "li", "a", "img",
             "video", "source"
         ],
         ALLOWED_ATTR: ["href", "src", "alt", "title", "target", "rel", "controls", "style"]
@@ -413,24 +413,28 @@ const ArticleDetail: React.FC = () => {
                 <h1 className="article-title">{article.title}</h1>
                 {article.category && article.category.length > 0 && (
                     <div className="article-categories">
-                    {article.category.map((cat, index) => (
-                        <span
-                        key={index}
-                        className="category-tag"
-                        onClick={() => navigate(`/category/${encodeURIComponent(cat)}`)}
-                        style={{ cursor: "pointer", color: "#3b82f6" }}
-                        >
-                        #{cat}
-                        </span>
-                    ))}
+                        {article.category.map((cat, index) => (
+                            <span
+                                key={index}
+                                className="category-tag"
+                                onClick={() => navigate(`/category/${encodeURIComponent(cat)}`)}
+                                style={{ cursor: "pointer", color: "#3b82f6" }}
+                            >
+                                #{cat}
+                            </span>
+                        ))}
                     </div>
                 )}
                 <div className="article-detail-meta">
                     <div className="article-author">
                         <img
-                            src={article.user.user_icon}
+                            src={article.user.user_icon || '/cat_icon.png'}
                             alt={`${article.user.username} のアイコン`}
                             className="author-icon"
+                            onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = '/cat_icon.png';
+                            }}
                         />
                         <span className="author-name">{article.user.username}</span>
                     </div>
@@ -494,13 +498,17 @@ const ArticleDetail: React.FC = () => {
                 <h2>この記事を作成したユーザー</h2>
                 <div className="user-info">
                     <img
-                        src={article.user.user_icon}
+                        src={article.user.user_icon || '/cat_icon.png'}
                         alt={`${article.user.username} のアイコン`}
                         className="user-icon"
+                        onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/cat_icon.png';
+                        }}
                     />
                     <div>
                         <p><strong>{article.user.username}</strong></p>
-                        <p>{article.user.introduction_text}</p>
+                        <p>{article.user.introduction_text || 'まだ自己紹介が設定されていません'}</p>
                     </div>
                 </div>
             </div>
@@ -536,29 +544,29 @@ const ArticleDetail: React.FC = () => {
                         <div className="articles-list">
                             {article.user_articles.slice(0, 3).map((userArticle, index) => (
                                 <div key={index} className="article-card" onClick={() => navigate(`/articles/${userArticle.id}`)}>
-                                <div className="card-thumbnail">
-                                    {userArticle.thumbnail_url ? (
-                                        <img
-                                            src={userArticle.thumbnail_url}
-                                            alt={userArticle.title}
-                                            className="thumbnail-image"
-                                        />
-                                    ) : (
-                                        <div className="placeholder-thumbnail" />
-                                    )}
-                                </div>
-                                <div className="card-content">
-                                    <h2 className="article-title">
-                                        {truncateText(userArticle.title, 25)}
-                                    </h2>
-                                    <div className="article-meta">
-                                        <p>❤️ {userArticle.like_count}</p>
-                                        <p>💬 {userArticle.comment_count}</p>
-                                        <p>📅 {formatDate(userArticle.public_at)}</p>
-                                        <p>👁️‍🗨️ {userArticle.access_count}</p>
+                                    <div className="card-thumbnail">
+                                        {userArticle.thumbnail_url ? (
+                                            <img
+                                                src={userArticle.thumbnail_url}
+                                                alt={userArticle.title}
+                                                className="thumbnail-image"
+                                            />
+                                        ) : (
+                                            <div className="placeholder-thumbnail" />
+                                        )}
+                                    </div>
+                                    <div className="card-content">
+                                        <h2 className="article-title">
+                                            {truncateText(userArticle.title, 25)}
+                                        </h2>
+                                        <div className="article-meta">
+                                            <p>❤️ {userArticle.like_count}</p>
+                                            <p>💬 {userArticle.comment_count}</p>
+                                            <p>📅 {formatDate(userArticle.public_at)}</p>
+                                            <p>👁️‍🗨️ {userArticle.access_count}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
                             ))}
                         </div>
                     </div>
@@ -599,7 +607,7 @@ const ArticleDetail: React.FC = () => {
             </div>
 
             {showAuthModal && (
-            <AuthModal isOpen={true} onClose={() => setShowAuthModal(false)} />
+                <AuthModal isOpen={true} onClose={() => setShowAuthModal(false)} />
             )}
         </div>
 
