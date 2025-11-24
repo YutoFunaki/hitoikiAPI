@@ -48,6 +48,29 @@ class UserFollower(Base):
     deleted_at = Column(TIMESTAMP, nullable=True)
 
 
+# 🔄 メディア管理テーブル（既存のstaticファイルと併用）
+class MediaFile(Base):
+    __tablename__ = "media_files"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    original_filename = Column(String, nullable=False)  # 元のファイル名
+    stored_filename = Column(String, unique=True, nullable=False)  # サーバー保存時のファイル名（UUID）
+    file_path = Column(String, nullable=False)  # ファイルパス
+    file_url = Column(String, nullable=False)  # アクセス用URL
+    thumbnail_url = Column(String, nullable=True)  # サムネイルURL（画像の場合）
+    file_type = Column(String, nullable=False)  # MIME type
+    file_size = Column(Integer, nullable=False)  # ファイルサイズ（bytes）
+    alt_text = Column(String, nullable=True)  # アクセシビリティ用alt text
+    caption = Column(Text, nullable=True)  # 画像キャプション
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)  # アップロードユーザー
+    is_public = Column(String, default="public")  # public, private, limited
+    access_count = Column(Integer, default=0)  # アクセス数
+    download_count = Column(Integer, default=0)  # ダウンロード数
+    created_at = Column(TIMESTAMP, nullable=False)
+    updated_at = Column(TIMESTAMP, nullable=False)
+    deleted_at = Column(TIMESTAMP, nullable=True)
+
+
 class Article(Base):
     __tablename__ = "articles"
 

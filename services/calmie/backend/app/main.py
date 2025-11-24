@@ -15,7 +15,7 @@ from app.database import engine
 import uuid
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from app.models import Article, HistoryRating, ArticleComment  # Articleモデルをインポート
+from app.models import Article, HistoryRating, ArticleComment, MediaFile  # Articleモデルをインポート
 from app.database import get_db  # データベースセッションを取得する関数をインポート
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -2004,3 +2004,286 @@ def get_hourly_trend(db: Session = Depends(get_db)):
     except Exception as e:
         print(f"時間別トレンド取得エラー: {e}")
         return {"articles": [], "period": "hourly"}
+
+
+# ===== 🆕 新しいメディア管理エンドポイント =====
+# 既存のstaticファイル配信と併用し、段階的に移行可能
+
+@app.post("/v2/upload-media")
+async def upload_media_v2(
+    file: UploadFile = File(...),
+    alt_text: Optional[str] = Form(None),
+    caption: Optional[str] = Form(None),
+    is_public: str = Form("public"),
+    user_id: int = Form(...),
+    db: Session = Depends(get_db)
+):
+    """
+    新しいメディア管理システム
+    既存の/upload-media/と併用可能
+    """
+    try:
+        # ファイルサイズ・種類チェック（既存ロジック再利用）
+        file_size = 0
+        async for chunk in file.stream(1024 * 1024):
+            file_size += len(chunk)
+            if file_size > MAX_FILE_SIZE_MB * 1024 * 1024:
+                raise HTTPException(status_code=413, detail="ファイルサイズが大きすぎます。")
+
+        extension = file.filename.split(".")[-1].lower()
+        if extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"無効なファイル形式です。")
+
+        # UUIDベースのファイル名生成
+        stored_filename = f"{uuid.uuid4()}.{extension}"
+        file_path = os.path.join(UPLOAD_DIRECTORY, stored_filename)
+
+        # 既存の画像最適化ロジックを再利用
+        thumbnail_url = None
+        if extension in ["jpg", "jpeg", "png"]:
+            await file.seek(0)
+            image_data = await file.read()
+            image = Image.open(BytesIO(image_data))
+            
+            # 画像最適化処理（既存ロジック）
+            image = ImageOps.exif_transpose(image)
+            if image.mode in ('RGBA', 'P'):
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                image = background
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            width, height = image.size
+            if width > MAX_IMAGE_WIDTH or height > MAX_IMAGE_WIDTH:
+                if width > height:
+                    new_width = MAX_IMAGE_WIDTH
+                    new_height = int((MAX_IMAGE_WIDTH / width) * height)
+                else:
+                    new_height = MAX_IMAGE_WIDTH
+                    new_width = int((MAX_IMAGE_WIDTH / height) * width)
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+            # 最適化保存
+            buffer = BytesIO()
+            image.save(buffer, format="JPEG", quality=60, optimize=True, progressive=True)
+            
+            async with aiofiles.open(file_path, "wb") as out_file:
+                await out_file.write(buffer.getvalue())
+            
+            # サムネイル作成
+            thumb_filename = f"{uuid.uuid4()}_thumb.jpg"
+            thumb_path = os.path.join(UPLOAD_DIRECTORY, thumb_filename)
+            thumb_image = image.copy()
+            thumb_image.thumbnail((400, 400), Image.Resampling.LANCZOS)
+            
+            thumb_buffer = BytesIO()
+            thumb_image.save(thumb_buffer, format="JPEG", quality=50, optimize=True)
+            async with aiofiles.open(thumb_path, "wb") as thumb_file:
+                await thumb_file.write(thumb_buffer.getvalue())
+            
+            thumbnail_url = f"{get_base_url()}/static/{thumb_filename}"
+        else:
+            # 非画像ファイル
+            async with aiofiles.open(file_path, "wb") as out_file:
+                content = await file.read()
+                await out_file.write(content)
+
+        file_url = f"{get_base_url()}/static/{stored_filename}"
+
+        # 🆕 データベースに記録
+        media_record = MediaFile(
+            original_filename=file.filename,
+            stored_filename=stored_filename,
+            file_path=file_path,
+            file_url=file_url,
+            thumbnail_url=thumbnail_url,
+            file_type=file.content_type,
+            file_size=file_size,
+            alt_text=alt_text or file.filename,
+            caption=caption,
+            uploaded_by=user_id,
+            is_public=is_public,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        db.add(media_record)
+        db.commit()
+        db.refresh(media_record)
+
+        return {
+            "media_id": media_record.id,
+            "filename": stored_filename,
+            "url": file_url,
+            "thumbnail_url": thumbnail_url,
+            "original_filename": file.filename,
+            "alt_text": media_record.alt_text,
+            "caption": media_record.caption,
+            "file_size": file_size,
+            "message": "新しいメディア管理システムでアップロード完了"
+        }
+
+    except HTTPException as http_err:
+        raise http_err
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"メディアアップロードエラー: {str(e)}")
+
+
+@app.get("/v2/media/{media_id}")
+def get_media_info(media_id: int, db: Session = Depends(get_db)):
+    """メディア情報取得"""
+    media = db.query(MediaFile).filter(
+        MediaFile.id == media_id,
+        MediaFile.deleted_at.is_(None)
+    ).first()
+    
+    if not media:
+        raise HTTPException(status_code=404, detail="メディアが見つかりません")
+    
+    # アクセス数を増加
+    media.access_count += 1
+    db.commit()
+    
+    return {
+        "id": media.id,
+        "original_filename": media.original_filename,
+        "url": media.file_url,
+        "thumbnail_url": media.thumbnail_url,
+        "file_type": media.file_type,
+        "file_size": media.file_size,
+        "alt_text": media.alt_text,
+        "caption": media.caption,
+        "is_public": media.is_public,
+        "access_count": media.access_count,
+        "created_at": media.created_at
+    }
+
+
+@app.get("/v2/media/user/{user_id}")
+def get_user_media(user_id: int, limit: int = 50, db: Session = Depends(get_db)):
+    """ユーザーのメディア一覧取得"""
+    media_list = db.query(MediaFile).filter(
+        MediaFile.uploaded_by == user_id,
+        MediaFile.deleted_at.is_(None)
+    ).order_by(MediaFile.created_at.desc()).limit(limit).all()
+    
+    return {
+        "media_list": [
+            {
+                "id": media.id,
+                "original_filename": media.original_filename,
+                "url": media.file_url,
+                "thumbnail_url": media.thumbnail_url,
+                "file_type": media.file_type,
+                "alt_text": media.alt_text,
+                "caption": media.caption,
+                "created_at": media.created_at
+            }
+            for media in media_list
+        ],
+        "total": len(media_list)
+    }
+
+
+@app.patch("/v2/media/{media_id}")
+def update_media_info(
+    media_id: int,
+    alt_text: Optional[str] = None,
+    caption: Optional[str] = None,
+    is_public: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """メディア情報更新"""
+    media = db.query(MediaFile).filter(
+        MediaFile.id == media_id,
+        MediaFile.deleted_at.is_(None)
+    ).first()
+    
+    if not media:
+        raise HTTPException(status_code=404, detail="メディアが見つかりません")
+    
+    if alt_text is not None:
+        media.alt_text = alt_text
+    if caption is not None:
+        media.caption = caption
+    if is_public is not None:
+        media.is_public = is_public
+    
+    media.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {"message": "メディア情報を更新しました", "media_id": media_id}
+
+
+@app.delete("/v2/media/{media_id}")
+def delete_media(media_id: int, user_id: int, db: Session = Depends(get_db)):
+    """メディア削除（論理削除）"""
+    media = db.query(MediaFile).filter(
+        MediaFile.id == media_id,
+        MediaFile.uploaded_by == user_id,  # 所有者チェック
+        MediaFile.deleted_at.is_(None)
+    ).first()
+    
+    if not media:
+        raise HTTPException(status_code=404, detail="メディアが見つかりません")
+    
+    # 論理削除
+    media.deleted_at = datetime.utcnow()
+    db.commit()
+    
+    return {"message": "メディアを削除しました", "media_id": media_id}
+
+
+# 🔄 既存のエンドポイントとの互換性を保つラッパー
+@app.get("/media/migrate/{static_filename}")
+def migrate_static_to_managed(static_filename: str, user_id: int, db: Session = Depends(get_db)):
+    """
+    既存のstaticファイルを新しいメディア管理システムに移行
+    本番環境の既存ファイルを段階的に移行可能
+    """
+    try:
+        file_path = os.path.join(UPLOAD_DIRECTORY, static_filename)
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="ファイルが見つかりません")
+        
+        # 既に管理システムに登録済みかチェック
+        existing = db.query(MediaFile).filter(
+            MediaFile.stored_filename == static_filename
+        ).first()
+        
+        if existing:
+            return {"message": "既に移行済みです", "media_id": existing.id}
+        
+        # ファイル情報を取得
+        file_size = os.path.getsize(file_path)
+        extension = static_filename.split(".")[-1].lower()
+        
+        # データベースに登録
+        media_record = MediaFile(
+            original_filename=static_filename,  # 元ファイル名不明のため
+            stored_filename=static_filename,
+            file_path=file_path,
+            file_url=f"{get_base_url()}/static/{static_filename}",
+            file_type=f"image/{extension}" if extension in ["jpg", "jpeg", "png"] else "application/octet-stream",
+            file_size=file_size,
+            alt_text=f"移行されたメディア: {static_filename}",
+            uploaded_by=user_id,
+            is_public="public",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        db.add(media_record)
+        db.commit()
+        db.refresh(media_record)
+        
+        return {
+            "message": "既存ファイルを管理システムに移行しました",
+            "media_id": media_record.id,
+            "url": media_record.file_url
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"移行エラー: {str(e)}")
