@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import SideMenu from "./SideMenu";
-import Articles from "./Articles";
+import Articles from "./articles";
 import ArticleDetail from "./ArticleDetail";
 import Header from "./header";
 import PostArticle from "./PostArticle";

@@ -182,7 +182,7 @@ const PostArticle: React.FC = () => {
                     onChange={(val) => setContent(val || "")}
                     preview="edit"
                     hideToolbar
-                    visibleDragBar={false}
+                    visibleDragbar={false}
                 />
             </div>
 
