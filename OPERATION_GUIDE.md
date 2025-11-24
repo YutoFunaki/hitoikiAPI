@@ -98,9 +98,23 @@ sudo systemctl reload nginx
 
 ### 定期確認項目
 - [ ] サービス稼働状況: `docker compose ps`
-- [ ] ディスク容量: `df -h`
+- [ ] ディスク容量: `./disk-monitor.sh`
+- [ ] 週次クリーンアップ: `./cleanup.sh`
 - [ ] ログファイルサイズ: `du -sh /var/log/nginx/`
 - [ ] SSL証明書期限: 自動更新（Let's Encrypt）
+
+### ディスク管理
+```bash
+# 毎日の監視
+./disk-monitor.sh
+
+# 週次クリーンアップ
+./cleanup.sh
+
+# 緊急時（80%以上）
+sudo docker system prune -af
+sudo journalctl --vacuum-time=3d
+```
 
 ## 🔐 セキュリティ管理
 
