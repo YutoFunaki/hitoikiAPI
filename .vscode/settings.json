@@ -1,0 +1,28 @@
+{
+    "python.defaultInterpreterPath": "./services/calmie/backend/venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/node_modules": true,
+        "**/.git": false,
+        "**/dist": true,
+        "**/build": true
+    },
+    "docker.showStartPage": false,
+    "typescript.preferences.includePackageJsonAutoImports": "on",
+    "emmet.includeLanguages": {
+        "typescript": "html",
+        "typescriptreact": "html"
+    },
+    "files.associations": {
+        "*.env.*": "dotenv",
+        "docker-compose*.yml": "dockercompose"
+    },
+    "terminal.integrated.defaultProfile.osx": "fish",
+    "workbench.startupEditor": "readme",
+    "git.openRepositoryInParentFolders": "always"
+}
