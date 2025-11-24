@@ -1,6 +1,7 @@
 import os
 import jwt
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -2008,6 +2009,41 @@ def get_hourly_trend(db: Session = Depends(get_db)):
 
 # ===== 🆕 新しいメディア管理エンドポイント =====
 # 既存のstaticファイル配信と併用し、段階的に移行可能
+
+# 🔗 クリーンURL提供エンドポイント
+@app.get("/media/file/{file_id}")
+async def get_clean_media_url(file_id: str, db: Session = Depends(get_db)):
+    """
+    ユーザーフレンドリーなURLでメディアファイルにアクセス
+    例: /media/file/cat_icon → /static/cat_icon.png へリダイレクト
+    """
+    # 既存ファイルへの静的マッピング
+    file_mapping = {
+        "cat_icon": "cat_icon.png",
+        "shufti1": "shufti1.jpg",
+        "shufti2": "shufti2.jpg", 
+        "shufti3": "shufti3.jpg",
+        "shufti4": "shufti4.jpg",
+    }
+    
+    if file_id in file_mapping:
+        static_url = f"{get_base_url()}/static/{file_mapping[file_id]}"
+        return RedirectResponse(url=static_url, status_code=302)
+    
+    # データベースから検索
+    media = db.query(MediaFile).filter(
+        MediaFile.id == file_id,
+        MediaFile.deleted_at.is_(None)
+    ).first()
+    
+    if media:
+        # アクセス数増加
+        media.access_count += 1
+        db.commit()
+        return RedirectResponse(url=media.file_url, status_code=302)
+    
+    raise HTTPException(status_code=404, detail="ファイルが見つかりません")
+
 
 @app.post("/v2/upload-media")
 async def upload_media_v2(

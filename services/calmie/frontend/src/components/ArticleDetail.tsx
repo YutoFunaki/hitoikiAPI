@@ -206,6 +206,20 @@ const ArticleDetail: React.FC = () => {
         replace: '<img src="$1" alt="$2" style="max-width:100%; max-height:300px; display:block; margin:10px auto;" $3 />'
     }, "imageResizer");
 
+    // 🆕 Media表示の改善 - URLを隠してユーザーフレンドリーに
+    converter.addExtension({
+        type: "lang",
+        regex: /!\[Media\]\((.*?)\)/g,
+        replace: function(_match: string, url: string) {
+            // URLから意味のあるalt textを生成
+            const filename = url.split('/').pop() || '';
+            const cleanFilename = filename.replace(/[a-f0-9\-]{36}/gi, '').replace(/\.(jpg|jpeg|png|gif)$/i, '');
+            const altText = cleanFilename || '画像';
+            
+            return `![${altText}](${url})`;
+        }
+    }, "mediaUrlHider");
+
     converter.addExtension({
         type: "output",
         regex: /<video src="(.*?)"(.*?)>/g,
